@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model recarga_whatsapp {
+  id_recarga                  BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
+  operacion_uuid              String                       @unique(map: "uq_recarga_operacion_uuid") @db.Char(36)
+  telefono_whatsapp           String                       @db.VarChar(20)
+  ultimo_message_id           String?                      @db.VarChar(255)
+  comprobante_message_id      String?                      @unique(map: "uq_recarga_comprobante_message") @db.VarChar(255)
+  cliente_id                  Int?
+  cliente_cedula              String?                      @db.VarChar(10)
+  cliente_usuario             String?                      @db.VarChar(25)
+  cliente_nombres             String?                      @db.VarChar(100)
+  sucursal_id                 Int?
+  sucursal_nombre             String?                      @db.VarChar(50)
+  plataforma_id               Int?
+  plataforma_nombre           String?                      @db.VarChar(30)
+  monto                       Decimal?                     @db.Decimal(10, 2)
+  numero_comprobante          BigInt?                      @unique(map: "uq_recarga_numero_comprobante")
+  metodo_pago                 recarga_whatsapp_metodo_pago @default(Transferencia)
+  banco_nombre_detectado      String?                      @db.VarChar(100)
+  beneficiario_detectado      String?                      @db.VarChar(150)
+  cuenta_detectada            String?                      @db.VarChar(50)
+  observacion_ocr             String?                      @db.VarChar(500)
+  banco_id                    Int?
+  banco_nombre_validado       String?                      @db.VarChar(50)
+  banco_titular_validado      String?                      @db.VarChar(40)
+  banco_cuenta_validada       String?                      @db.VarChar(50)
+  banco_tipo_cuenta_validado  String?                      @db.VarChar(20)
+  bot_usuario_id              Int?
+  comprobante_imagen          Bytes?
+  comprobante_mime            String?                      @db.VarChar(100)
+  comprobante_sha256          String?                      @db.Char(64)
+  comprobante_tamano          Int?                         @db.UnsignedInt
+  fase                        recarga_whatsapp_fase        @default(elegir_sucursal)
+  estado                      recarga_whatsapp_estado      @default(pendiente)
+  reporte_plataforma_id       Int?                         @unique(map: "uq_recarga_reporte_plataforma")
+  aplicada_at                 DateTime?                    @db.DateTime(0)
+  notificado_at               DateTime?                    @db.DateTime(0)
+  procesando_token            String?                      @db.Char(36)
+  procesando_hasta            DateTime?                    @db.DateTime(0)
+  notificacion_token          String?                      @db.Char(36)
+  notificacion_hasta          DateTime?                    @db.DateTime(0)
+  error_interno               String?                      @db.VarChar(500)
+  intentos_procesamiento      Int                          @default(0) @db.UnsignedSmallInt
+  date_create                 DateTime                     @default(now()) @db.DateTime(0)
+  date_update                 DateTime                     @default(now()) @db.DateTime(0)
+  telefono_transaccion_activa String?                      @unique(map: "uq_recarga_telefono_activo") @db.VarChar(20)
+
+  @@index([banco_id], map: "idx_recarga_banco")
+  @@index([cliente_id], map: "idx_recarga_cliente")
+  @@index([estado, aplicada_at, notificado_at], map: "idx_recarga_estado")
+  @@index([notificacion_hasta], map: "idx_recarga_notificacion")
+  @@index([plataforma_id], map: "idx_recarga_plataforma")
+  @@index([procesando_hasta], map: "idx_recarga_procesando")
+  @@index([sucursal_id], map: "idx_recarga_sucursal")
+  @@index([telefono_whatsapp, date_create], map: "idx_recarga_telefono")
+}
+
+/// Tabla administrada por el bot. El panel solo consulta y revisa retiros existentes.
+model retirar_saldo {
+  id_retiro                       BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
+  operacion_uuid                  String                @unique(map: "uq_retirar_saldo_uuid") @db.Char(36)
+  conversacion_id                 BigInt                @unique(map: "uq_retirar_saldo_conversacion") @db.UnsignedBigInt
+  telefono_whatsapp               String                @db.VarChar(20)
+  cliente_id                      Int?
+  cliente_cedula                  String?               @db.VarChar(10)
+  cliente_usuario                 String?               @db.VarChar(25)
+  cliente_nombres                 String?               @db.VarChar(100)
+  sucursal_id                     Int?
+  sucursal_nombre                 String?               @db.VarChar(50)
+  origen                          retirar_saldo_origen?
+  plataforma_id                   Int?
+  plataforma_nombre               String?               @db.VarChar(30)
+  monto                           Decimal?              @db.Decimal(10, 2)
+  banco_destino                   String?               @db.VarChar(100)
+  tipo_cuenta_destino             String?               @db.VarChar(30)
+  numero_cuenta_destino           String?               @db.VarChar(50)
+  titular_destino                 String?               @db.VarChar(150)
+  premio_message_id               String?               @unique(map: "uq_retirar_saldo_premio_message") @db.VarChar(255)
+  premio_imagen                   Bytes?
+  premio_mime                     String?               @db.VarChar(100)
+  premio_sha256                   String?               @db.Char(64)
+  premio_tamano                   Int?                  @db.UnsignedInt
+  comprobante_pago_imagen         Bytes?
+  comprobante_pago_mime           String?               @db.VarChar(100)
+  comprobante_pago_sha256         String?               @unique(map: "uq_retirar_saldo_pago_sha256") @db.Char(64)
+  comprobante_pago_tamano         Int?                  @db.UnsignedInt
+  monto_detectado                 Decimal?              @db.Decimal(10, 2)
+  numero_comprobante              BigInt?               @unique(map: "uq_retirar_saldo_comprobante")
+  banco_origen_id                 Int?
+  banco_origen_detectado          String?               @db.VarChar(100)
+  cuenta_origen_detectada         String?               @db.VarChar(50)
+  titular_origen_detectado        String?               @db.VarChar(150)
+  banco_destino_detectado         String?               @db.VarChar(100)
+  cuenta_destino_detectada        String?               @db.VarChar(50)
+  beneficiario_detectado          String?               @db.VarChar(150)
+  observacion_ocr                 String?               @db.VarChar(500)
+  agente_panel_id                 Int?                  @db.UnsignedInt
+  agente_usuario_id               Int?
+  revisado_at                     DateTime?             @db.DateTime(0)
+  motivo_rechazo                  String?               @db.VarChar(500)
+  reporte_plataforma_id           Int?                  @unique(map: "uq_retirar_saldo_reporte")
+  aplicado_at                     DateTime?             @db.DateTime(0)
+  comprobante_enviado_at          DateTime?             @db.DateTime(0)
+  whatsapp_comprobante_message_id String?               @unique(map: "uq_retirar_saldo_whatsapp_pago") @db.VarChar(255)
+  notificado_at                   DateTime?             @db.DateTime(0)
+  estado                          retirar_saldo_estado  @default(borrador)
+  procesando_token                String?               @db.Char(36)
+  procesando_hasta                DateTime?             @db.DateTime(0)
+  notificacion_token              String?               @db.Char(36)
+  notificacion_hasta              DateTime?             @db.DateTime(0)
+  intentos_procesamiento          Int                   @default(0) @db.UnsignedSmallInt
+  intentos_notificacion           Int                   @default(0) @db.UnsignedSmallInt
+  error_interno                   String?               @db.VarChar(500)
+  date_create                     DateTime              @default(now()) @db.DateTime(0)
+  date_update                     DateTime              @default(now()) @db.DateTime(0)
+
+  @@index([estado, aplicado_at, notificado_at], map: "idx_retirar_saldo_estado")
+  @@index([telefono_whatsapp, date_create], map: "idx_retirar_saldo_telefono")
+  @@index([cliente_id], map: "idx_retirar_saldo_cliente")
+  @@index([sucursal_id], map: "idx_retirar_saldo_sucursal")
+  @@index([plataforma_id], map: "idx_retirar_saldo_plataforma")
+  @@index([banco_origen_id], map: "idx_retirar_saldo_banco_origen")
+  @@index([agente_panel_id], map: "idx_retirar_saldo_agente_panel")
+  @@index([agente_usuario_id], map: "idx_retirar_saldo_agente_usuario")
+  @@index([procesando_hasta], map: "idx_retirar_saldo_procesando")
+  @@index([notificacion_hasta], map: "idx_retirar_saldo_notificacion")
+}
+
+model usuarios {
+  id_usuario  Int             @id @default(autoincrement()) @db.UnsignedInt
+  usuario     String          @unique(map: "uq_usuarios_usuario") @db.VarChar(50)
+  clave       String          @db.VarChar(255)
+  nombres     String          @db.VarChar(100)
+  rol         usuarios_rol    @default(vendedor)
+  estado      usuarios_estado @default(activo)
+  date_create DateTime        @default(now()) @db.DateTime(0)
+  date_update DateTime        @default(now()) @db.DateTime(0)
+
+  @@index([estado], map: "idx_usuarios_estado")
+  @@index([rol], map: "idx_usuarios_rol")
+}
+
+enum usuarios_rol {
+  administrador
+  vendedor
+}
+
+enum usuarios_estado {
+  activo
+  inactivo
+}
+
+enum recarga_whatsapp_metodo_pago {
+  Transferencia
+}
+
+enum recarga_whatsapp_fase {
+  elegir_sucursal
+  menu
+  identificar_cliente
+  elegir_plataforma
+  esperar_comprobante
+  esperar_revision
+  finalizada
+}
+
+enum recarga_whatsapp_estado {
+  pendiente
+  aprobado
+  rechazado
+}
+
+enum retirar_saldo_origen {
+  casino
+  las_platas
+  monetixplus
+}
+
+enum retirar_saldo_estado {
+  borrador
+  pendiente
+  aprobado
+  error_comprobante
+  pagado
+  rechazado
+  cancelado
+}

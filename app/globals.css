@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+}
+
+:root {
+  color-scheme: light;
+  --background: oklch(0.975 0.008 105);
+  --foreground: oklch(0.19 0.018 160);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.018 160);
+  --primary: oklch(0.78 0.18 125);
+  --primary-foreground: oklch(0.17 0.025 145);
+  --secondary: oklch(0.945 0.008 110);
+  --secondary-foreground: oklch(0.25 0.018 150);
+  --muted: oklch(0.945 0.008 110);
+  --muted-foreground: oklch(0.52 0.018 145);
+  --destructive: oklch(0.58 0.2 28);
+  --border: oklch(0.89 0.01 110);
+  --ring: oklch(0.66 0.15 125);
+  --sidebar: #000000;
+  --sidebar-foreground: oklch(0.97 0.008 110);
+  --sidebar-accent: oklch(0.27 0.025 158);
+}
+
+* {
+  border-color: var(--border);
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist), Arial, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.scrollbar-thin {
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
