@@ -23,6 +23,7 @@ export function WithdrawalModal({
   const [error, setError] = useState("");
   const [pending, setPending] = useState<Decision | null>(null);
   const receiptError = item.status === "error_comprobante";
+  const originBankError = item.internalError === "origin_bank_not_registered";
   const reviewable = isWithdrawalReviewable(item.status);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -111,7 +112,15 @@ export function WithdrawalModal({
                 {(item.detectedOriginBank || item.detectedOriginAccount) && (
                   <p className="mt-2 text-sm"><span className="font-medium">Origen detectado:</span> {[item.detectedOriginBank, item.detectedOriginAccount].filter(Boolean).join(" · ")}</p>
                 )}
-                <p className="mt-3 text-sm font-medium">Registra esa cuenta en la tabla de bancos o reemplaza el comprobante por uno pagado desde una cuenta registrada.</p>
+                <div className="mt-3 grid gap-2 rounded-lg bg-white/60 p-3 text-sm">
+                  <p><span className="font-medium">Destino ingresado:</span> {item.bank} · {item.account}</p>
+                  <p><span className="font-medium">Destino detectado:</span> {[item.detectedDestinationBank, item.detectedDestinationAccount, item.detectedBeneficiary].filter(Boolean).join(" · ") || "No legible"}</p>
+                </div>
+                <p className="mt-3 text-sm font-medium">
+                  {originBankError
+                    ? "Registra la cuenta origen en la tabla de bancos o reemplaza el comprobante por uno pagado desde una cuenta registrada."
+                    : "Verifica que el monto y la cuenta destino coincidan. El beneficiario puede ser un familiar o un tercero."}
+                </p>
               </div>
             )}
             {item.ocrText && !receiptError && <Info title="Lectura OCR" text={item.ocrText} />}
