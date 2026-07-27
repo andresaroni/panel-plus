@@ -19,6 +19,7 @@ const PAGE_SIZE = 15;
 const statuses = [
   ["pendiente", "Pendiente"],
   ["aprobado", "Aprobada"],
+  ["atendido", "Atendida"],
   ["pagado", "Pagada"],
   ["rechazado", "Rechazada"],
   ["error_comprobante", "Error de comprobante"],
@@ -51,7 +52,7 @@ export default async function ReportsPage({
   await requireAdmin();
   const params = await searchParams;
   const defaults = currentDates();
-  const operation: ReportOperation = ["recarga", "retiro"].includes(params.operation ?? "")
+  const operation: ReportOperation = ["recarga", "retiro", "servicio"].includes(params.operation ?? "")
     ? (params.operation as ReportOperation)
     : "todas";
   const filters: ReportFilters = {
@@ -83,7 +84,7 @@ export default async function ReportsPage({
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Reportes de transacciones</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Analiza recargas y retiros por período, plataforma y estado.
+          Analiza recargas, retiros y solicitudes de servicio por período y estado.
         </p>
       </div>
 
@@ -103,9 +104,10 @@ export default async function ReportsPage({
               <option value="todas">Todas</option>
               <option value="recarga">Recargas</option>
               <option value="retiro">Retiros</option>
+              <option value="servicio">Servicios</option>
             </select>
           </Filter>
-          <Filter label="Plataforma">
+          <Filter label="Plataforma / sucursal">
             <select name="platform" defaultValue={filters.platform} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
               <option value="">Todas</option>
               {platforms.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
@@ -125,7 +127,7 @@ export default async function ReportsPage({
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Volumen aprobado" value={formatMoney(metrics.approvedAmount)} detail={`${metrics.approved} operaciones`} icon={CircleDollarSign} />
-        <MetricCard label="Tasa de aprobación" value={`${approvalRate}%`} detail="Sobre el resultado filtrado" icon={Check} />
+        <MetricCard label="Tasa favorable" value={`${approvalRate}%`} detail="Aprobadas, pagadas o atendidas" icon={Check} />
         <MetricCard label="Monto rechazado" value={formatMoney(metrics.rejectedAmount)} detail="Recargas y retiros rechazados" icon={XCircle} />
         <MetricCard label="Solicitudes" value={String(metrics.total)} detail="Coinciden con los filtros" icon={FileChartColumn} />
       </div>
@@ -134,7 +136,7 @@ export default async function ReportsPage({
         <div className="flex flex-col justify-between gap-2 border-b p-5 sm:flex-row sm:items-center">
           <div>
             <h3 className="font-semibold">Detalle de transacciones</h3>
-            <p className="text-sm text-muted-foreground">Período {filters.from} al {filters.to} · {report.total} resultados</p>
+             <p className="text-sm text-muted-foreground">Período {filters.from} al {filters.to} · {report.total} resultados</p>
           </div>
           <a href={`/api/reportes/exportar?${query}`} className="inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold hover:bg-secondary">Exportar CSV</a>
         </div>
@@ -142,7 +144,7 @@ export default async function ReportsPage({
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-5 py-3">Solicitud</th><th className="px-5 py-3">Operación</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Cédula / usuario</th><th className="px-5 py-3">Plataforma</th><th className="px-5 py-3">Banco / referencia</th><th className="px-5 py-3">Monto</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3">Fecha</th>
+                 <th className="px-5 py-3">Solicitud</th><th className="px-5 py-3">Operación</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Cédula / usuario</th><th className="px-5 py-3">Plataforma / sucursal</th><th className="px-5 py-3">Banco / referencia / detalle</th><th className="px-5 py-3">Monto</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3">Fecha</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -152,9 +154,18 @@ export default async function ReportsPage({
                   <td className="px-5 py-4 font-medium">{record.operation}</td>
                   <td className="px-5 py-4 font-medium">{record.client}</td>
                   <td className="px-5 py-4"><p>{record.clientId}</p><p className="text-xs text-muted-foreground">@{record.username}</p></td>
-                  <td className="px-5 py-4 capitalize">{record.platform}</td>
-                  <td className="px-5 py-4"><p>{record.bank}</p><p className="font-mono text-xs text-muted-foreground">Ref. {record.reference}</p></td>
-                  <td className="px-5 py-4 font-semibold tabular-nums">{formatMoney(record.amount)}</td>
+                   <td className="px-5 py-4 capitalize">
+                     <p>{record.operation === "Servicio" ? record.branch : record.platform}</p>
+                     {record.operation !== "Servicio" && <p className="text-xs text-muted-foreground">{record.branch}</p>}
+                   </td>
+                   <td className="max-w-72 px-5 py-4">
+                     {record.detail ? (
+                       <p className="line-clamp-2 whitespace-normal" title={record.detail}>{record.detail}</p>
+                     ) : (
+                       <><p>{record.bank}</p><p className="font-mono text-xs text-muted-foreground">Ref. {record.reference}</p></>
+                     )}
+                   </td>
+                   <td className="px-5 py-4 font-semibold tabular-nums">{record.amount === null ? "No aplica" : formatMoney(record.amount)}</td>
                   <td className="px-5 py-4"><StatusBadge status={record.status} /></td>
                   <td className="px-5 py-4 text-muted-foreground">{formatDate(record.createdAt)}</td>
                 </tr>

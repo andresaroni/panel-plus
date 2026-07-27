@@ -7,7 +7,7 @@ import { submittedTopUpWhere } from "@/lib/recargas";
 import { submittedWithdrawalWhere } from "@/lib/retiros";
 
 export async function getRequestsVersion() {
-  const [topUps, topUpStates, withdrawals, withdrawalStates] = await Promise.all([
+  const [topUps, topUpStates, withdrawals, withdrawalStates, services, serviceStates] = await Promise.all([
     prisma.recarga_whatsapp.aggregate({
       where: submittedTopUpWhere,
       _count: { _all: true },
@@ -30,6 +30,15 @@ export async function getRequestsVersion() {
       _count: { _all: true },
       orderBy: { estado: "asc" },
     }),
+    prisma.solicitudes_servicio.aggregate({
+      _count: { _all: true },
+      _max: { id_solicitud: true, date_update: true },
+    }),
+    prisma.solicitudes_servicio.groupBy({
+      by: ["estado"],
+      _count: { _all: true },
+      orderBy: { estado: "asc" },
+    }),
   ]);
 
   const fingerprint = JSON.stringify({
@@ -44,6 +53,12 @@ export async function getRequestsVersion() {
       lastId: withdrawals._max.id_retiro?.toString() ?? "0",
       updatedAt: withdrawals._max.date_update?.toISOString() ?? null,
       states: withdrawalStates.map((item) => [item.estado, item._count._all]),
+    },
+    services: {
+      count: services._count._all,
+      lastId: services._max.id_solicitud?.toString() ?? "0",
+      updatedAt: services._max.date_update?.toISOString() ?? null,
+      states: serviceStates.map((item) => [item.estado, item._count._all]),
     },
   });
 

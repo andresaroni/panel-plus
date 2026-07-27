@@ -149,6 +149,34 @@ model usuarios {
   @@index([rol], map: "idx_usuarios_rol")
 }
 
+model solicitudes_servicio {
+  id_solicitud        BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
+  operacion_uuid      String                       @unique(map: "uq_solicitudes_servicio_uuid") @db.Char(36)
+  conversacion_id     BigInt?                      @unique(map: "uq_solicitudes_servicio_conversacion") @db.UnsignedBigInt
+  telefono_whatsapp   String                       @db.VarChar(20)
+  detalle             String                       @db.Text
+  cliente_id          Int?
+  cliente_cedula      String?                      @db.VarChar(20)
+  cliente_usuario     String?                      @db.VarChar(50)
+  cliente_nombres     String?                      @db.VarChar(150)
+  sucursal_id         Int?
+  sucursal_nombre     String?                      @db.VarChar(100)
+  estado              solicitudes_servicio_estado @default(pendiente)
+  agente_panel_id     Int?                         @db.UnsignedInt
+  agente_usuario_id   Int?
+  atendido_at         DateTime?                    @db.DateTime(0)
+  cancelado_at        DateTime?                    @db.DateTime(0)
+  whatsapp_message_id String?                      @unique(map: "uq_solicitudes_servicio_message") @db.VarChar(255)
+  date_create         DateTime                     @default(now()) @db.DateTime(0)
+  date_update         DateTime                     @default(now()) @db.DateTime(0)
+
+  @@index([estado, date_create], map: "idx_solicitudes_servicio_estado")
+  @@index([telefono_whatsapp, date_create], map: "idx_solicitudes_servicio_telefono")
+  @@index([cliente_id], map: "idx_solicitudes_servicio_cliente")
+  @@index([sucursal_id], map: "idx_solicitudes_servicio_sucursal")
+  @@index([agente_panel_id], map: "idx_solicitudes_servicio_agente")
+}
+
 enum usuarios_rol {
   administrador
   vendedor
@@ -170,6 +198,7 @@ enum recarga_whatsapp_fase {
   elegir_plataforma
   esperar_comprobante
   esperar_revision
+  esperar_detalle_servicio
   finalizada
 }
 
@@ -192,5 +221,11 @@ enum retirar_saldo_estado {
   error_comprobante
   pagado
   rechazado
+  cancelado
+}
+
+enum solicitudes_servicio_estado {
+  pendiente
+  atendido
   cancelado
 }

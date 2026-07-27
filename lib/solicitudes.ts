@@ -4,21 +4,25 @@ import type { Status } from "@/components/status-badge";
 import { prisma } from "@/lib/prisma";
 import { buildSearchWhere, requestSelect, submittedTopUpWhere } from "@/lib/recargas";
 import {
+  buildServiceRequestWhere,
+  serviceRequestSelect,
+} from "@/lib/service-requests";
+import {
   buildWithdrawalWhere,
   submittedWithdrawalWhere,
   withdrawalSelect,
 } from "@/lib/retiros";
 
-export type OperationFilter = "todas" | "recarga" | "retiro";
+export type OperationFilter = "todas" | "recarga" | "retiro" | "servicio";
 
 export type UnifiedRequest = {
   key: string;
-  type: "recarga" | "retiro";
+  type: "recarga" | "retiro" | "servicio";
   id: string;
   client: string;
   username: string;
   platform: string;
-  amount: string;
+  amount: string | null;
   status: Status;
   createdAt: Date;
 };
@@ -35,12 +39,14 @@ export async function getUnifiedRequests({
   pageSize: number;
 }) {
   const take = page * pageSize;
-  const includeTopUps = operation !== "retiro";
-  const includeWithdrawals = operation !== "recarga";
+  const includeTopUps = operation === "todas" || operation === "recarga";
+  const includeWithdrawals = operation === "todas" || operation === "retiro";
+  const includeServices = operation === "todas" || operation === "servicio";
   const topUpWhere = buildSearchWhere(query);
   const withdrawalWhere = buildWithdrawalWhere(query);
+  const serviceWhere = buildServiceRequestWhere(query);
 
-  const [topUps, withdrawals, topUpCount, withdrawalCount] = await Promise.all([
+  const [topUps, withdrawals, services, topUpCount, withdrawalCount, serviceCount] = await Promise.all([
     includeTopUps
       ? prisma.recarga_whatsapp.findMany({
           where: topUpWhere,
@@ -57,8 +63,17 @@ export async function getUnifiedRequests({
           take,
         })
       : [],
+    includeServices
+      ? prisma.solicitudes_servicio.findMany({
+          where: serviceWhere,
+          select: serviceRequestSelect,
+          orderBy: { date_create: "desc" },
+          take,
+        })
+      : [],
     prisma.recarga_whatsapp.count({ where: topUpWhere }),
     prisma.retirar_saldo.count({ where: withdrawalWhere }),
+    prisma.solicitudes_servicio.count({ where: serviceWhere }),
   ]);
 
   const combined: UnifiedRequest[] = [
@@ -86,6 +101,17 @@ export async function getUnifiedRequests({
       status: item.estado,
       createdAt: item.date_create,
     })),
+    ...services.map((item) => ({
+      key: `servicio-${item.id_solicitud}`,
+      type: "servicio" as const,
+      id: item.id_solicitud.toString(),
+      client: item.cliente_nombres ?? "Cliente sin nombre",
+      username: item.cliente_usuario ?? "sin-usuario",
+      platform: item.sucursal_nombre ?? "No disponible",
+      amount: null,
+      status: item.estado,
+      createdAt: item.date_create,
+    })),
   ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
   const total =
@@ -93,13 +119,16 @@ export async function getUnifiedRequests({
       ? topUpCount
       : operation === "retiro"
         ? withdrawalCount
-        : topUpCount + withdrawalCount;
+        : operation === "servicio"
+          ? serviceCount
+          : topUpCount + withdrawalCount + serviceCount;
   const offset = (page - 1) * pageSize;
   return {
     items: combined.slice(offset, offset + pageSize),
     total,
     topUpCount,
     withdrawalCount,
+    serviceCount,
   };
 }
 
@@ -113,6 +142,8 @@ export async function getRequestMetrics(dayStart: Date, dayEnd: Date) {
     withdrawalVolume,
     totalTopUps,
     totalWithdrawals,
+    pendingServices,
+    totalServices,
   ] = await Promise.all([
     prisma.recarga_whatsapp.count({
       where: { AND: [submittedTopUpWhere, { estado: "pendiente" }] },
@@ -144,14 +175,16 @@ export async function getRequestMetrics(dayStart: Date, dayEnd: Date) {
     }),
     prisma.recarga_whatsapp.count({ where: submittedTopUpWhere }),
     prisma.retirar_saldo.count({ where: submittedWithdrawalWhere }),
+    prisma.solicitudes_servicio.count({ where: { estado: "pendiente" } }),
+    prisma.solicitudes_servicio.count(),
   ]);
 
   return {
-    pending: pendingTopUps + pendingWithdrawals,
+    pending: pendingTopUps + pendingWithdrawals + pendingServices,
     approvedToday: approvedTopUpsToday + approvedWithdrawalsToday,
     volume:
       Number(topUpVolume._sum.monto?.toString() ?? 0) +
       Number(withdrawalVolume._sum.monto?.toString() ?? 0),
-    total: totalTopUps + totalWithdrawals,
+    total: totalTopUps + totalWithdrawals + totalServices,
   };
 }

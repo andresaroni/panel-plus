@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (user.role !== "administrador") return new NextResponse(null, { status: 403 });
 
   const params = request.nextUrl.searchParams;
-  const operation: ReportOperation = ["recarga", "retiro"].includes(
+  const operation: ReportOperation = ["recarga", "retiro", "servicio"].includes(
     params.get("operation") ?? "",
   )
     ? (params.get("operation") as ReportOperation)
@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     "Sucursal",
     "Banco",
     "Referencia",
+    "Detalle del servicio",
     "Monto USD",
     "Estado",
     "Fecha",
@@ -60,7 +61,8 @@ export async function GET(request: NextRequest) {
     item.branch,
     item.bank,
     item.reference,
-    Number(item.amount).toFixed(2),
+    item.detail ?? "",
+    item.amount === null ? "" : Number(item.amount).toFixed(2),
     item.status,
     formatDate(item.createdAt),
   ]);

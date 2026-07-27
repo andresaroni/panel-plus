@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
+  MessageCircle,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -13,12 +14,14 @@ import Form from "next/form";
 import { LiveRequests } from "@/components/live-requests";
 import { MetricCard } from "@/components/metric-card";
 import { ReviewModal } from "@/components/review-modal";
+import { ServiceRequestModal } from "@/components/service-request-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { WithdrawalModal } from "@/components/withdrawal-modal";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requestSelect, serializeRequest, submittedTopUpWhere } from "@/lib/recargas";
 import { getRequestsVersion } from "@/lib/request-version";
+import { serializeServiceRequest, serviceRequestSelect } from "@/lib/service-requests";
 import {
   getRequestMetrics,
   getUnifiedRequests,
@@ -46,7 +49,7 @@ export default async function RequestsPage({
 }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
-  const operation: OperationFilter = ["recarga", "retiro"].includes(params.tipo ?? "")
+  const operation: OperationFilter = ["recarga", "retiro", "servicio"].includes(params.tipo ?? "")
     ? (params.tipo as OperationFilter)
     : "todas";
   const page = Math.min(100, Math.max(1, Number(params.page) || 1));
@@ -68,13 +71,19 @@ export default async function RequestsPage({
   const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
   const validReviewId = params.review && /^\d{1,20}$/.test(params.review);
 
-  const [selectedTopUp, selectedWithdrawal] = await Promise.all([
+  const [selectedTopUp, selectedServiceRequest, selectedWithdrawal] = await Promise.all([
     validReviewId && params.reviewType === "recarga"
       ? prisma.recarga_whatsapp.findFirst({
           where: {
             AND: [submittedTopUpWhere, { id_recarga: BigInt(params.review!) }],
           },
           select: requestSelect,
+        })
+      : null,
+    validReviewId && params.reviewType === "servicio"
+      ? prisma.solicitudes_servicio.findUnique({
+          where: { id_solicitud: BigInt(params.review!) },
+          select: serviceRequestSelect,
         })
       : null,
     validReviewId && params.reviewType === "retiro"
@@ -96,9 +105,10 @@ export default async function RequestsPage({
   const returnUrl = `/solicitudes${listParams({ page: String(page) }) ? `?${listParams({ page: String(page) })}` : ""}`;
 
   const tabs: { value: OperationFilter; label: string; count: number }[] = [
-    { value: "todas", label: "Todas", count: list.topUpCount + list.withdrawalCount },
+    { value: "todas", label: "Todas", count: list.topUpCount + list.withdrawalCount + list.serviceCount },
     { value: "recarga", label: "Recargas", count: list.topUpCount },
     { value: "retiro", label: "Retiros", count: list.withdrawalCount },
+    { value: "servicio", label: "Servicios", count: list.serviceCount },
   ];
 
   return (
@@ -107,17 +117,21 @@ export default async function RequestsPage({
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Centro de solicitudes</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gestiona recargas y retiros de saldo desde una sola bandeja.
+            Gestiona recargas, retiros y solicitudes de servicio desde una sola bandeja.
           </p>
         </div>
         <LiveRequests
           initialVersion={initialVersion}
-          paused={Boolean(selectedTopUp || (selectedWithdrawal && isWithdrawalReviewable(selectedWithdrawal.estado)))}
+          paused={Boolean(
+            selectedTopUp ||
+            (selectedWithdrawal && isWithdrawalReviewable(selectedWithdrawal.estado)) ||
+            selectedServiceRequest?.estado === "pendiente"
+          )}
         />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Por revisar" value={String(metrics.pending).padStart(2, "0")} detail="Recargas y retiros pendientes" icon={Clock3} />
+        <MetricCard label="Por revisar" value={String(metrics.pending).padStart(2, "0")} detail="Operaciones y servicios pendientes" icon={Clock3} />
         <MetricCard label="Aprobadas" value={String(metrics.approvedToday).padStart(2, "0")} detail="Durante esta jornada" icon={Check} />
         <MetricCard label="Volumen gestionado" value={formatMoney(metrics.volume)} detail="Operaciones aprobadas" icon={CircleDollarSign} />
         <MetricCard label="Solicitudes" value={String(metrics.total).padStart(2, "0")} detail="Registros totales" icon={FileText} />
@@ -166,7 +180,7 @@ export default async function RequestsPage({
               <tr>
                 <th className="px-5 py-3 font-medium">Solicitud / cliente</th>
                 <th className="px-5 py-3 font-medium">Operación</th>
-                <th className="px-5 py-3 font-medium">Plataforma</th>
+                <th className="px-5 py-3 font-medium">Plataforma / sucursal</th>
                 <th className="px-5 py-3 font-medium">Monto</th>
                 <th className="px-5 py-3 font-medium">Estado</th>
                 <th className="px-5 py-3 font-medium">Acción</th>
@@ -174,7 +188,7 @@ export default async function RequestsPage({
             </thead>
             <tbody className="divide-y">
               {list.items.map((item) => {
-                const prefix = item.type === "recarga" ? "REC" : "RET";
+                const prefix = item.type === "recarga" ? "REC" : item.type === "retiro" ? "RET" : "SER";
                 return (
                   <tr key={item.key} className="hover:bg-secondary/25">
                     <td className="px-5 py-4">
@@ -183,19 +197,19 @@ export default async function RequestsPage({
                     </td>
                     <td className="px-5 py-4">
                       <span className="flex items-center gap-1.5">
-                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : <ArrowUpRight className="size-4" />}
-                        {item.type === "recarga" ? "Recarga" : "Retiro"}
+                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : <MessageCircle className="size-4 text-primary" />}
+                        {item.type === "recarga" ? "Recarga" : item.type === "retiro" ? "Retiro" : "Servicio"}
                       </span>
                     </td>
                     <td className="px-5 py-4 capitalize">{item.platform}</td>
-                    <td className="px-5 py-4 font-semibold tabular-nums">{formatMoney(item.amount)}</td>
+                    <td className="px-5 py-4 font-semibold tabular-nums">{item.amount === null ? "No aplica" : formatMoney(item.amount)}</td>
                     <td className="px-5 py-4"><StatusBadge status={item.status} /></td>
                     <td className="px-5 py-4">
                       <Link
                         href={`/solicitudes?${listParams({ page: String(page), reviewType: item.type, review: item.id })}`}
                         className="inline-flex rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-secondary"
                       >
-                        {item.status === "pendiente" || item.status === "error_comprobante" ? "Revisar" : "Ver detalle"}
+                        {item.type === "servicio" && item.status === "pendiente" ? "Atender" : item.status === "pendiente" || item.status === "error_comprobante" ? "Revisar" : "Ver detalle"}
                       </Link>
                     </td>
                   </tr>
@@ -219,6 +233,7 @@ export default async function RequestsPage({
 
       {selectedTopUp && <ReviewModal item={serializeRequest(selectedTopUp)} returnUrl={returnUrl} />}
       {selectedWithdrawal && <WithdrawalModal item={serializeWithdrawal(selectedWithdrawal)} returnUrl={returnUrl} />}
+      {selectedServiceRequest && <ServiceRequestModal item={serializeServiceRequest(selectedServiceRequest)} returnUrl={returnUrl} />}
     </div>
   );
 }
