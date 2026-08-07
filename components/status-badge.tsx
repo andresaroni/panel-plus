@@ -1,12 +1,12 @@
 const styles = {
   pendiente: "bg-stone-100 text-stone-600",
-  aprobado: "bg-lime-50 text-lime-800",
+  aprobado: "bg-yellow-100 text-yellow-900",
   rechazado: "bg-red-50 text-red-600",
   borrador: "bg-slate-100 text-slate-600",
   error_comprobante: "bg-orange-50 text-orange-700",
-  pagado: "bg-emerald-50 text-emerald-700",
+  pagado: "bg-yellow-100 text-yellow-900",
   cancelado: "bg-zinc-100 text-zinc-600",
-  atendido: "bg-emerald-50 text-emerald-700",
+  atendido: "bg-yellow-100 text-yellow-900",
 };
 
 const labels = {

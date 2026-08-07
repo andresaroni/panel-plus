@@ -14,13 +14,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexo Control | Panel de operaciones",
+  title: "PanelPlus+ | Panel de operaciones",
   description: "Panel seguro para validar recargas y administrar operaciones.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PanelPlus+",
+  },
+  icons: { icon: "/panelplus-icon.svg" },
 };
 
 export const viewport: Viewport = {
   colorScheme: "light",
-  themeColor: "#f5f6f2",
+  themeColor: "#ffd400",
   width: "device-width",
   initialScale: 1,
 };

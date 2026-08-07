@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronRight, ShieldCheck } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import Image from "next/image";
 import { useActionState, useState } from "react";
 
 import { loginAction, type AuthState } from "@/app/actions/auth";
+import panelPlusLogo from "@/assets/nuevo_logo.png";
 import { SubmitButton } from "@/components/submit-button";
 
 const initialState: AuthState = {};
@@ -15,14 +17,11 @@ export function LoginForm() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
       <section className="w-full max-w-md">
-        <div className="mb-10 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ShieldCheck aria-hidden="true" />
-          </span>
-          <div>
-            <p className="font-semibold">Nexo Control</p>
-            <p className="text-xs text-muted-foreground">Centro de operaciones</p>
-          </div>
+        <div className="mb-10">
+          <Image src={panelPlusLogo} alt="PanelPlus+" priority className="h-auto w-72 max-w-full" />
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            PanelPlus+ · Centro de operaciones
+          </p>
         </div>
 
         <p className="text-sm font-semibold text-primary">Bienvenido</p>

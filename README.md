@@ -1,4 +1,4 @@
-# Nexo Control
+# PanelPlus+
 
 Panel operativo construido con Next.js, Prisma y MariaDB para administrar usuarios, validar recargas y revisar retiros de `registro_bot`.
 
@@ -17,6 +17,22 @@ Panel operativo construido con Next.js, Prisma y MariaDB para administrar usuari
 
 La aplicación utiliza introspección sobre una base existente. No ejecutes `prisma migrate reset` contra la base del bot.
 
+## Alertas Web Push
+
+Aplica `AsistenteBot/sql/migracion_004_panel_push.sql` en `registro_bot` y configura:
+
+```env
+WEB_PUSH_PUBLIC_KEY="clave-publica-vapid"
+WEB_PUSH_PRIVATE_KEY="clave-privada-vapid"
+WEB_PUSH_SUBJECT="https://www.frankobot.app"
+PANEL_PUSH_WEBHOOK_SECRET="secreto-compartido-de-al-menos-32-caracteres"
+```
+
+Genera el par VAPID con `pnpm exec web-push generate-vapid-keys`. El secreto del
+webhook debe coincidir con `PANEL_PUSH_SECRET` del bot. Android y escritorio
+pueden activar alertas desde el encabezado. En iOS 16.4 o superior es necesario
+agregar el panel a la pantalla de inicio y activarlas desde la aplicación instalada.
+
 ## Administrador inicial
 
 En PowerShell, define temporalmente las credenciales y ejecuta el seed:
@@ -30,6 +46,18 @@ Remove-Item Env:ADMIN_USERNAME, Env:ADMIN_NAME, Env:ADMIN_PASSWORD
 ```
 
 El comando rechaza usuarios existentes y almacena la contraseña con Argon2id.
+
+## Historial del Asistente IA
+
+Aplica `prisma/sql/migracion_005_asistente_historial.sql` una sola vez sobre la base
+`registro_bot`. La migración crea las conversaciones privadas de cada administrador
+y sus mensajes, con eliminación en cascada. No modifica recargas, retiros ni
+solicitudes existentes.
+
+```bash
+pnpm exec prisma db execute --file prisma/sql/migracion_005_asistente_historial.sql --schema prisma/schema.prisma
+pnpm prisma:generate
+```
 
 ## Desarrollo
 

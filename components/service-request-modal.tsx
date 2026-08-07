@@ -68,7 +68,7 @@ export function ServiceRequestModal({
           {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {whatsappUrl ? (
-              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#25D366] font-semibold text-white hover:brightness-95"><MessageCircle className="size-4" />Abrir chat en WhatsApp</a>
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-primary-foreground hover:brightness-95"><MessageCircle className="size-4" />Abrir chat en WhatsApp</a>
             ) : (
               <span className="flex h-11 items-center justify-center rounded-xl bg-secondary text-sm text-muted-foreground">Número de WhatsApp inválido</span>
             )}

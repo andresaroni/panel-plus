@@ -7,6 +7,25 @@ const schema = z.object({
   SESSION_PASSWORD: z.string().min(32),
   APP_TIME_ZONE: z.string().default("America/Guayaquil"),
   ALLOW_ROOT_DATABASE: z.enum(["true", "false"]).default("false"),
+  WEB_PUSH_PUBLIC_KEY: z.string().trim().min(1).optional(),
+  WEB_PUSH_PRIVATE_KEY: z.string().trim().min(1).optional(),
+  WEB_PUSH_SUBJECT: z.string().trim().min(1).optional(),
+  PANEL_PUSH_WEBHOOK_SECRET: z.string().min(32).optional(),
+  OPENAI_API_KEY: z.string().trim().min(1).optional(),
+  OPENAI_CHAT_MODEL: z.string().trim().min(1).default("gpt-4.1-mini"),
+}).superRefine((value, context) => {
+  const pushValues = [
+    value.WEB_PUSH_PUBLIC_KEY,
+    value.WEB_PUSH_PRIVATE_KEY,
+    value.WEB_PUSH_SUBJECT,
+    value.PANEL_PUSH_WEBHOOK_SECRET,
+  ];
+  if (pushValues.some(Boolean) && !pushValues.every(Boolean)) {
+    context.addIssue({
+      code: "custom",
+      message: "La configuración Web Push debe incluir todas sus variables.",
+    });
+  }
 });
 
 const parsed = schema.safeParse(process.env);

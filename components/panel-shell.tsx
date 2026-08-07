@@ -6,21 +6,24 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
-  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
+import { RequestNotifications } from "@/components/request-notifications";
+import panelPlusLogo from "@/assets/nuevo_logo.png";
 import type { CurrentUser } from "@/lib/session";
 
 const titles: Record<string, string> = {
   solicitudes: "Solicitudes",
   usuarios: "Usuarios y roles",
   reportes: "Reportes",
+  asistente: "Asistente IA",
 };
 
 export function PanelShell({ user, children }: { user: CurrentUser; children: React.ReactNode }) {
@@ -40,6 +43,7 @@ export function PanelShell({ user, children }: { user: CurrentUser; children: Re
       ? [
           { href: "/usuarios", label: "Usuarios y roles", icon: Users },
           { href: "/reportes", label: "Reportes", icon: BarChart3 },
+          { href: "/asistente", label: "Asistente IA", icon: Bot },
         ]
       : []),
   ];
@@ -58,15 +62,12 @@ export function PanelShell({ user, children }: { user: CurrentUser; children: Re
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex h-20 items-center justify-between px-5">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <ShieldCheck aria-hidden="true" />
-            </span>
-            <div>
-              <p className="font-semibold">Nexo Control</p>
-              <p className="text-xs text-sidebar-foreground/60">Centro de operaciones</p>
-            </div>
+        <div className="flex min-h-24 items-center justify-between gap-3 px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <Image src={panelPlusLogo} alt="PanelPlus+" priority className="h-auto w-full" />
+            <p className="mt-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+              PanelPlus+ · Centro de operaciones
+            </p>
           </div>
           <button className="lg:hidden" onClick={() => setOpen(false)} aria-label="Cerrar menú">
             <X className="size-5" />
@@ -88,7 +89,7 @@ export function PanelShell({ user, children }: { user: CurrentUser; children: Re
                   onClick={() => setOpen(false)}
                   className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
                     active
-                      ? "bg-sidebar-accent text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
                   }`}
                 >
@@ -96,17 +97,6 @@ export function PanelShell({ user, children }: { user: CurrentUser; children: Re
                 </Link>
               );
             })}
-            {user.role === "administrador" && (
-              <div
-                className="flex cursor-not-allowed items-center justify-between rounded-xl px-3 py-3 text-sm text-sidebar-foreground/40"
-                title="En desarrollo"
-              >
-                <span className="flex items-center gap-3">
-                  <Bot className="size-5" aria-hidden="true" /> Asistente IA
-                </span>
-                <span className="text-[10px] uppercase">Pronto</span>
-              </div>
-            )}
           </div>
         </nav>
 
@@ -139,6 +129,7 @@ export function PanelShell({ user, children }: { user: CurrentUser; children: Re
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <RequestNotifications />
           <div className="hidden items-center gap-2 rounded-full border bg-card px-3 py-2 text-xs text-muted-foreground sm:flex">
             <span className="size-2 rounded-full bg-primary" /> Sistema operativo
           </div>

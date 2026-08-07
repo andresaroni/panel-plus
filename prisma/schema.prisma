@@ -136,39 +136,115 @@ model retirar_saldo {
 }
 
 model usuarios {
-  id_usuario  Int             @id @default(autoincrement()) @db.UnsignedInt
-  usuario     String          @unique(map: "uq_usuarios_usuario") @db.VarChar(50)
-  clave       String          @db.VarChar(255)
-  nombres     String          @db.VarChar(100)
-  rol         usuarios_rol    @default(vendedor)
-  estado      usuarios_estado @default(activo)
-  date_create DateTime        @default(now()) @db.DateTime(0)
-  date_update DateTime        @default(now()) @db.DateTime(0)
+  id_usuario         Int                        @id @default(autoincrement()) @db.UnsignedInt
+  usuario            String                     @unique(map: "uq_usuarios_usuario") @db.VarChar(50)
+  clave              String                     @db.VarChar(255)
+  nombres            String                     @db.VarChar(100)
+  rol                usuarios_rol               @default(vendedor)
+  estado             usuarios_estado            @default(activo)
+  date_create        DateTime                   @default(now()) @db.DateTime(0)
+  date_update        DateTime                   @default(now()) @db.DateTime(0)
+  ai_conversations   panel_ai_conversations[]
+  push_subscriptions panel_push_subscriptions[]
 
   @@index([estado], map: "idx_usuarios_estado")
   @@index([rol], map: "idx_usuarios_rol")
 }
 
+model panel_ai_conversations {
+  id_conversacion BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  usuario_id      Int                 @db.UnsignedInt
+  titulo          String              @db.VarChar(120)
+  date_create     DateTime            @default(now()) @db.DateTime(0)
+  date_update     DateTime            @default(now()) @db.DateTime(0)
+  usuario         usuarios            @relation(fields: [usuario_id], references: [id_usuario], onDelete: Cascade, map: "fk_ai_conversation_usuario")
+  mensajes        panel_ai_messages[]
+
+  @@index([usuario_id, date_update], map: "idx_ai_conversation_usuario")
+}
+
+model panel_ai_messages {
+  id_mensaje      BigInt                 @id @default(autoincrement()) @db.UnsignedBigInt
+  conversacion_id BigInt                 @db.UnsignedBigInt
+  rol             panel_ai_message_role
+  contenido       String                 @db.Text
+  date_create     DateTime               @default(now()) @db.DateTime(0)
+  conversacion    panel_ai_conversations @relation(fields: [conversacion_id], references: [id_conversacion], onDelete: Cascade, map: "fk_ai_message_conversation")
+
+  @@index([conversacion_id, id_mensaje], map: "idx_ai_message_conversation")
+}
+
+model panel_push_subscriptions {
+  id_suscripcion  BigInt                          @id @default(autoincrement()) @db.UnsignedBigInt
+  usuario_id      Int                             @db.UnsignedInt
+  endpoint        String                          @db.Text
+  endpoint_hash   String                          @unique(map: "uq_push_subscription_endpoint") @db.Char(64)
+  clave_p256dh    String                          @db.VarChar(255)
+  clave_auth      String                          @db.VarChar(255)
+  expiration_time BigInt?                         @db.UnsignedBigInt
+  user_agent      String?                         @db.VarChar(500)
+  estado          panel_push_subscriptions_estado @default(activa)
+  date_create     DateTime                        @default(now()) @db.DateTime(0)
+  date_update     DateTime                        @default(now()) @db.DateTime(0)
+  usuario         usuarios                        @relation(fields: [usuario_id], references: [id_usuario], onDelete: Cascade, map: "fk_push_subscription_usuario")
+
+  @@index([usuario_id, estado], map: "idx_push_subscription_usuario")
+}
+
+model panel_push_outbox {
+  id_outbox       BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  tipo            panel_push_request_type
+  solicitud_id    BigInt                  @db.UnsignedBigInt
+  entrega_token   String?                 @db.Char(36)
+  entrega_hasta   DateTime?               @db.DateTime(0)
+  proximo_intento DateTime                @default(now()) @db.DateTime(0)
+  intentos        Int                     @default(0) @db.UnsignedSmallInt
+  entregado_at    DateTime?               @db.DateTime(0)
+  ultimo_error    String?                 @db.VarChar(1000)
+  date_create     DateTime                @default(now()) @db.DateTime(0)
+  date_update     DateTime                @default(now()) @db.DateTime(0)
+
+  @@unique([tipo, solicitud_id], map: "uq_push_outbox_solicitud")
+  @@index([entregado_at, proximo_intento, entrega_hasta], map: "idx_push_outbox_pending")
+}
+
+model panel_push_events {
+  id_event         BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  tipo             panel_push_request_type
+  solicitud_id     BigInt                   @db.UnsignedBigInt
+  estado           panel_push_events_estado @default(pendiente)
+  procesando_token String?                  @db.Char(36)
+  procesando_hasta DateTime?                @db.DateTime(0)
+  intentos_envio   Int                      @default(0) @db.UnsignedSmallInt
+  enviado_at       DateTime?                @db.DateTime(0)
+  ultimo_error     String?                  @db.VarChar(1000)
+  date_create      DateTime                 @default(now()) @db.DateTime(0)
+  date_update      DateTime                 @default(now()) @db.DateTime(0)
+
+  @@unique([tipo, solicitud_id], map: "uq_push_event_solicitud")
+  @@index([estado, procesando_hasta], map: "idx_push_event_estado")
+}
+
 model solicitudes_servicio {
-  id_solicitud        BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
-  operacion_uuid      String                       @unique(map: "uq_solicitudes_servicio_uuid") @db.Char(36)
-  conversacion_id     BigInt?                      @unique(map: "uq_solicitudes_servicio_conversacion") @db.UnsignedBigInt
-  telefono_whatsapp   String                       @db.VarChar(20)
-  detalle             String                       @db.Text
+  id_solicitud        BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
+  operacion_uuid      String                      @unique(map: "uq_solicitudes_servicio_uuid") @db.Char(36)
+  conversacion_id     BigInt?                     @unique(map: "uq_solicitudes_servicio_conversacion") @db.UnsignedBigInt
+  telefono_whatsapp   String                      @db.VarChar(20)
+  detalle             String                      @db.Text
   cliente_id          Int?
-  cliente_cedula      String?                      @db.VarChar(20)
-  cliente_usuario     String?                      @db.VarChar(50)
-  cliente_nombres     String?                      @db.VarChar(150)
+  cliente_cedula      String?                     @db.VarChar(20)
+  cliente_usuario     String?                     @db.VarChar(50)
+  cliente_nombres     String?                     @db.VarChar(150)
   sucursal_id         Int?
-  sucursal_nombre     String?                      @db.VarChar(100)
+  sucursal_nombre     String?                     @db.VarChar(100)
   estado              solicitudes_servicio_estado @default(pendiente)
-  agente_panel_id     Int?                         @db.UnsignedInt
+  agente_panel_id     Int?                        @db.UnsignedInt
   agente_usuario_id   Int?
-  atendido_at         DateTime?                    @db.DateTime(0)
-  cancelado_at        DateTime?                    @db.DateTime(0)
-  whatsapp_message_id String?                      @unique(map: "uq_solicitudes_servicio_message") @db.VarChar(255)
-  date_create         DateTime                     @default(now()) @db.DateTime(0)
-  date_update         DateTime                     @default(now()) @db.DateTime(0)
+  atendido_at         DateTime?                   @db.DateTime(0)
+  cancelado_at        DateTime?                   @db.DateTime(0)
+  whatsapp_message_id String?                     @unique(map: "uq_solicitudes_servicio_message") @db.VarChar(255)
+  date_create         DateTime                    @default(now()) @db.DateTime(0)
+  date_update         DateTime                    @default(now()) @db.DateTime(0)
 
   @@index([estado, date_create], map: "idx_solicitudes_servicio_estado")
   @@index([telefono_whatsapp, date_create], map: "idx_solicitudes_servicio_telefono")
@@ -228,4 +304,27 @@ enum solicitudes_servicio_estado {
   pendiente
   atendido
   cancelado
+}
+
+enum panel_push_subscriptions_estado {
+  activa
+  inactiva
+}
+
+enum panel_push_request_type {
+  recarga
+  retiro
+  servicio
+}
+
+enum panel_push_events_estado {
+  pendiente
+  procesando
+  enviado
+  fallido
+}
+
+enum panel_ai_message_role {
+  user
+  assistant
 }
