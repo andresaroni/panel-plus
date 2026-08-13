@@ -288,6 +288,7 @@ enum retirar_saldo_origen {
   casino
   las_platas
   monetixplus
+  frankoplus
 }
 
 enum retirar_saldo_estado {
