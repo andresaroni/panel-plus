@@ -121,6 +121,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         comprobante_pago_mime: image.mime,
         comprobante_pago_sha256: image.sha256,
         comprobante_pago_tamano: image.size,
+        intentos_procesamiento: 0,
         agente_panel_id: currentUser.id,
         agente_usuario_id: currentUser.id,
         revisado_at: reviewedAt,

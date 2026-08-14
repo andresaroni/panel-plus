@@ -1,16 +1,17 @@
 "use client";
 
-import { AlertTriangle, Check, ImageIcon, X, XCircle } from "lucide-react";
+import { AlertTriangle, Check, ImageIcon, Trash2, X, XCircle } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney } from "@/lib/format";
-import { isWithdrawalReviewable } from "@/lib/withdrawal-state";
+import { isWithdrawalRemovable, isWithdrawalReviewable } from "@/lib/withdrawal-state";
 
 type Item = ReturnType<typeof import("@/lib/retiros").serializeWithdrawal>;
 type Decision = "aprobado" | "rechazado";
+type PendingAction = Decision | "eliminar";
 
 export function WithdrawalModal({
   item,
@@ -21,10 +22,15 @@ export function WithdrawalModal({
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
-  const [pending, setPending] = useState<Decision | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const receiptError = item.status === "error_comprobante";
   const originBankError = item.internalError === "origin_bank_not_registered";
   const reviewable = isWithdrawalReviewable(item.status);
+  const removable =
+    isWithdrawalRemovable(item.status) &&
+    item.appliedAt === null &&
+    item.reportId === null &&
+    item.receiptSentAt === null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,6 +51,30 @@ export function WithdrawalModal({
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
         setError(result?.error ?? "No fue posible procesar el retiro.");
+        return;
+      }
+      router.replace(returnUrl);
+      router.refresh();
+    } catch {
+      setError("No fue posible conectar con el servidor.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function cancelAndDelete() {
+    const confirmed = window.confirm(
+      `Se cancelará y eliminará permanentemente el retiro RET-${item.id.padStart(4, "0")} de ${item.client} por ${formatMoney(item.amount)}. ¿Deseas continuar?`,
+    );
+    if (!confirmed) return;
+
+    setError("");
+    setPending("eliminar");
+    try {
+      const response = await fetch(`/api/retiros/${item.id}`, { method: "DELETE" });
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(result?.error ?? "No fue posible cancelar y eliminar el retiro.");
         return;
       }
       router.replace(returnUrl);
@@ -149,6 +179,17 @@ export function WithdrawalModal({
               <div className="mt-7 rounded-xl bg-secondary p-4 text-sm">
                 {item.status === "aprobado" ? "El comprobante fue aprobado y está siendo validado. Esta vista se actualizará automáticamente si requiere corrección." : "Este retiro ya no está pendiente y no admite revisión manual."}
               </div>
+            )}
+            {removable && (
+              <button
+                type="button"
+                onClick={cancelAndDelete}
+                disabled={pending !== null}
+                className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                <Trash2 className="size-4" />
+                {pending === "eliminar" ? "Cancelando y eliminando..." : "Cancelar y eliminar"}
+              </button>
             )}
           </div>
         </div>
