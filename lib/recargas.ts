@@ -28,6 +28,8 @@ export const requestSelect = {
   aplicada_at: true,
   date_create: true,
   date_update: true,
+  presentado_panel_at: true,
+  primera_respuesta_at: true,
 } satisfies Prisma.recarga_whatsappSelect;
 
 export type RequestRecord = Prisma.recarga_whatsappGetPayload<{ select: typeof requestSelect }>;

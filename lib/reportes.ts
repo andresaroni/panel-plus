@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 
 import type { Status } from "@/components/status-badge";
+import { elapsedSeconds } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { parseDateRange, requestSelect, submittedTopUpWhere } from "@/lib/recargas";
 import { withdrawalSelect } from "@/lib/retiros";
@@ -39,6 +40,10 @@ export type ReportRecord = {
   amount: string | null;
   status: Status;
   createdAt: Date;
+  updatedAt: Date;
+  presentedAt: Date | null;
+  firstResponseAt: Date | null;
+  responseTimeSeconds: number | null;
 };
 
 const topUpStatuses = new Set<recarga_whatsapp_estado>([
@@ -122,6 +127,10 @@ function normalizeTopUp(item: Prisma.recarga_whatsappGetPayload<{ select: typeof
     amount: item.monto?.toString() ?? "0",
     status: item.estado,
     createdAt: item.date_create,
+    updatedAt: item.date_update,
+    presentedAt: item.presentado_panel_at,
+    firstResponseAt: item.primera_respuesta_at,
+    responseTimeSeconds: elapsedSeconds(item.presentado_panel_at, item.primera_respuesta_at),
   };
 }
 
@@ -147,6 +156,10 @@ function normalizeWithdrawal(
     amount: item.monto?.toString() ?? "0",
     status: item.estado,
     createdAt: item.date_create,
+    updatedAt: item.date_update,
+    presentedAt: item.presentado_panel_at,
+    firstResponseAt: item.primera_respuesta_at,
+    responseTimeSeconds: elapsedSeconds(item.presentado_panel_at, item.primera_respuesta_at),
   };
 }
 
@@ -169,6 +182,10 @@ function normalizeService(
     amount: null,
     status: item.estado,
     createdAt: item.date_create,
+    updatedAt: item.date_update,
+    presentedAt: item.presentado_panel_at,
+    firstResponseAt: item.primera_respuesta_at,
+    responseTimeSeconds: elapsedSeconds(item.presentado_panel_at, item.primera_respuesta_at),
   };
 }
 

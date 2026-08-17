@@ -91,6 +91,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         agente_panel_id: currentUser.id,
         agente_usuario_id: currentUser.id,
         revisado_at: reviewedAt,
+        date_update: reviewedAt,
       };
     } else {
       const file = form.get("comprobante");
@@ -125,16 +126,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         agente_panel_id: currentUser.id,
         agente_usuario_id: currentUser.id,
         revisado_at: reviewedAt,
+        date_update: reviewedAt,
       };
     }
 
-    const result = await prisma.retirar_saldo.updateMany({
+    let result = await prisma.retirar_saldo.updateMany({
       where: {
         id_retiro: BigInt(id),
-        estado: { in: ["pendiente", "error_comprobante"] },
+        estado: "pendiente",
       },
-      data,
+      data: { ...data, primera_respuesta_at: reviewedAt },
     });
+    if (result.count === 0) {
+      result = await prisma.retirar_saldo.updateMany({
+        where: {
+          id_retiro: BigInt(id),
+          estado: "error_comprobante",
+        },
+        data,
+      });
+    }
     if (result.count !== 1) {
       return NextResponse.json({ error: "El retiro ya fue procesado por otro agente o no existe." }, { status: 409 });
     }

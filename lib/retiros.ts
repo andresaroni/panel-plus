@@ -44,6 +44,8 @@ export const withdrawalSelect = {
   estado: true,
   date_create: true,
   date_update: true,
+  presentado_panel_at: true,
+  primera_respuesta_at: true,
 } satisfies Prisma.retirar_saldoSelect;
 
 export type WithdrawalRecord = Prisma.retirar_saldoGetPayload<{

@@ -24,6 +24,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         agente_usuario_id: currentUser.id,
         atendido_at: attendedAt,
         cancelado_at: null,
+        primera_respuesta_at: attendedAt,
         date_update: attendedAt,
       },
     });

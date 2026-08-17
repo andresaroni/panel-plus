@@ -17,6 +17,7 @@ type LockedWithdrawal = {
   aplicado_at: Date | null;
   reporte_plataforma_id: number | null;
   comprobante_enviado_at: Date | null;
+  primera_respuesta_at: Date | null;
 };
 
 class WithdrawalNotFoundError extends Error {}
@@ -47,7 +48,7 @@ export async function DELETE(
       async (transaction) => {
         const rows = await transaction.$queryRaw<LockedWithdrawal[]>`
           SELECT conversacion_id, estado, aplicado_at, reporte_plataforma_id,
-                 comprobante_enviado_at
+                 comprobante_enviado_at, primera_respuesta_at
           FROM retirar_saldo
           WHERE id_retiro = ${withdrawalId}
           FOR UPDATE
@@ -79,7 +80,8 @@ export async function DELETE(
         await transaction.panel_push_events.deleteMany({
           where: { tipo: "retiro", solicitud_id: withdrawalId },
         });
-        const deleted = await transaction.retirar_saldo.deleteMany({
+        const cancelledAt = new Date();
+        const cancelled = await transaction.retirar_saldo.updateMany({
           where: {
             id_retiro: withdrawalId,
             estado: { in: ["borrador", "pendiente"] },
@@ -87,8 +89,21 @@ export async function DELETE(
             reporte_plataforma_id: null,
             comprobante_enviado_at: null,
           },
+          data: {
+            estado: "cancelado",
+            agente_panel_id: currentUser.id,
+            agente_usuario_id: currentUser.id,
+            revisado_at: cancelledAt,
+            motivo_rechazo: null,
+            procesando_token: null,
+            procesando_hasta: null,
+            notificacion_token: null,
+            notificacion_hasta: null,
+            primera_respuesta_at: withdrawal.primera_respuesta_at ?? cancelledAt,
+            date_update: cancelledAt,
+          },
         });
-        if (deleted.count !== 1) throw new WithdrawalConflictError();
+        if (cancelled.count !== 1) throw new WithdrawalConflictError();
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -106,12 +121,12 @@ export async function DELETE(
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       return NextResponse.json(
-        { error: "No fue posible cancelar y eliminar el retiro." },
+        { error: "No fue posible cancelar el retiro." },
         { status: 409 },
       );
     }
     return NextResponse.json(
-      { error: "No fue posible cancelar y eliminar el retiro." },
+      { error: "No fue posible cancelar el retiro." },
       { status: 500 },
     );
   }

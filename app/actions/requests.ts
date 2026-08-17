@@ -23,9 +23,14 @@ export async function updateRequestStatus(
   if (!parsed.success) return { error: "Solicitud inválida." };
 
   try {
+    const respondedAt = new Date();
     const result = await prisma.recarga_whatsapp.updateMany({
       where: { id_recarga: BigInt(parsed.data.id), estado: "pendiente" },
-      data: { estado: parsed.data.status },
+      data: {
+        estado: parsed.data.status,
+        primera_respuesta_at: respondedAt,
+        date_update: respondedAt,
+      },
     });
 
     if (result.count !== 1) {

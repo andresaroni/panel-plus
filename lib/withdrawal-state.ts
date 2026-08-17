@@ -2,6 +2,6 @@ export function isWithdrawalReviewable(status: string) {
   return status === "pendiente" || status === "error_comprobante";
 }
 
-export function isWithdrawalRemovable(status: string) {
+export function isWithdrawalCancellable(status: string) {
   return status === "borrador" || status === "pendiente";
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { formatDate } from "@/lib/format";
+import { formatDate, formatResponseTime } from "@/lib/format";
 import {
   getReportExportRecords,
   type ReportFilters,
@@ -48,7 +48,11 @@ export async function GET(request: NextRequest) {
     "Detalle del servicio",
     "Monto USD",
     "Estado",
-    "Fecha",
+    "Fecha de creación",
+    "Presentada al panel",
+    "Primera respuesta",
+    "Última actualización",
+    "Tiempo de respuesta",
   ];
   const rows = records.map((item) => [
     item.id,
@@ -65,6 +69,10 @@ export async function GET(request: NextRequest) {
     item.amount === null ? "" : Number(item.amount).toFixed(2),
     item.status,
     formatDate(item.createdAt),
+    item.presentedAt ? formatDate(item.presentedAt) : "",
+    item.firstResponseAt ? formatDate(item.firstResponseAt) : "",
+    formatDate(item.updatedAt),
+    formatResponseTime(item.responseTimeSeconds, item.presentedAt, item.status),
   ]);
   const csv = `\uFEFF${[header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
 

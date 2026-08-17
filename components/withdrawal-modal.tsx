@@ -1,17 +1,17 @@
 "use client";
 
-import { AlertTriangle, Check, ImageIcon, Trash2, X, XCircle } from "lucide-react";
+import { AlertTriangle, Check, ImageIcon, X, XCircle } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney } from "@/lib/format";
-import { isWithdrawalRemovable, isWithdrawalReviewable } from "@/lib/withdrawal-state";
+import { isWithdrawalCancellable, isWithdrawalReviewable } from "@/lib/withdrawal-state";
 
 type Item = ReturnType<typeof import("@/lib/retiros").serializeWithdrawal>;
 type Decision = "aprobado" | "rechazado";
-type PendingAction = Decision | "eliminar";
+type PendingAction = Decision | "cancelar";
 
 export function WithdrawalModal({
   item,
@@ -27,7 +27,7 @@ export function WithdrawalModal({
   const originBankError = item.internalError === "origin_bank_not_registered";
   const reviewable = isWithdrawalReviewable(item.status);
   const removable =
-    isWithdrawalRemovable(item.status) &&
+    isWithdrawalCancellable(item.status) &&
     item.appliedAt === null &&
     item.reportId === null &&
     item.receiptSentAt === null;
@@ -62,19 +62,19 @@ export function WithdrawalModal({
     }
   }
 
-  async function cancelAndDelete() {
+  async function cancelWithdrawal() {
     const confirmed = window.confirm(
-      `Se cancelará y eliminará permanentemente el retiro RET-${item.id.padStart(4, "0")} de ${item.client} por ${formatMoney(item.amount)}. ¿Deseas continuar?`,
+      `Se cancelará el retiro RET-${item.id.padStart(4, "0")} de ${item.client} por ${formatMoney(item.amount)}. El registro se conservará en reportes. ¿Deseas continuar?`,
     );
     if (!confirmed) return;
 
     setError("");
-    setPending("eliminar");
+    setPending("cancelar");
     try {
       const response = await fetch(`/api/retiros/${item.id}`, { method: "DELETE" });
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
-        setError(result?.error ?? "No fue posible cancelar y eliminar el retiro.");
+        setError(result?.error ?? "No fue posible cancelar el retiro.");
         return;
       }
       router.replace(returnUrl);
@@ -183,12 +183,12 @@ export function WithdrawalModal({
             {removable && (
               <button
                 type="button"
-                onClick={cancelAndDelete}
+                onClick={cancelWithdrawal}
                 disabled={pending !== null}
                 className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
               >
-                <Trash2 className="size-4" />
-                {pending === "eliminar" ? "Cancelando y eliminando..." : "Cancelar y eliminar"}
+                <XCircle className="size-4" />
+                {pending === "cancelar" ? "Cancelando..." : "Cancelar retiro"}
               </button>
             )}
           </div>
