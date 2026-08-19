@@ -15,6 +15,26 @@ export function formatDate(value: Date | string) {
   }).format(new Date(value));
 }
 
+const relativeUnits: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 24 * 60 * 60],
+  ["month", 30 * 24 * 60 * 60],
+  ["day", 24 * 60 * 60],
+  ["hour", 60 * 60],
+  ["minute", 60],
+];
+
+export function formatRelativeDate(value: Date | string | null, now: Date = new Date()) {
+  if (!value) return "No disponible";
+
+  const seconds = Math.round((new Date(value).getTime() - now.getTime()) / 1000);
+  const distance = Math.abs(seconds);
+  const formatter = new Intl.RelativeTimeFormat("es-EC", { numeric: "auto" });
+  const match = relativeUnits.find(([, size]) => distance >= size);
+  return match
+    ? formatter.format(Math.round(seconds / match[1]), match[0])
+    : formatter.format(seconds, "second");
+}
+
 export function elapsedSeconds(start: Date | string | null, end: Date | string | null) {
   if (!start || !end) return null;
   const elapsed = Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000);

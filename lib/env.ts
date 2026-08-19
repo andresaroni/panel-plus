@@ -4,6 +4,7 @@ import { z } from "zod";
 
 const schema = z.object({
   DATABASE_URL: z.string().url(),
+  APUESTAS_DATABASE_URL: z.string().url().optional(),
   SESSION_PASSWORD: z.string().min(32),
   APP_TIME_ZONE: z.string().default("America/Guayaquil"),
   ALLOW_ROOT_DATABASE: z.enum(["true", "false"]).default("false"),
@@ -34,10 +35,14 @@ if (!parsed.success) {
   throw new Error(`Configuración inválida: ${z.prettifyError(parsed.error)}`);
 }
 
+const usesRootAccount = (url: string) => /^mysql:\/\/root(?::[^@]*)?@/i.test(url);
+
 if (
   process.env.NODE_ENV === "production" &&
   parsed.data.ALLOW_ROOT_DATABASE !== "true" &&
-  /^mysql:\/\/root(?::[^@]*)?@/i.test(parsed.data.DATABASE_URL)
+  [parsed.data.DATABASE_URL, parsed.data.APUESTAS_DATABASE_URL]
+    .filter((url) => url !== undefined)
+    .some(usesRootAccount)
 ) {
   throw new Error("La aplicación no puede usar la cuenta root de MySQL en producción.");
 }

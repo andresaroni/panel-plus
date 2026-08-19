@@ -4,6 +4,7 @@ import {
   elapsedSeconds,
   formatDuration,
   formatMoney,
+  formatRelativeDate,
   formatResponseTime,
   initials,
 } from "./format";
@@ -31,5 +32,12 @@ describe("formateadores", () => {
     expect(formatResponseTime(null, "2026-08-17T10:00:00Z", "pendiente")).toBe("Pendiente");
     expect(formatResponseTime(null, "2026-08-17T10:00:00Z", "aprobado")).toBe("No disponible");
     expect(formatResponseTime(null, null, "pendiente")).toBe("No disponible");
+  });
+
+  it("describe la antigüedad de una fecha en lenguaje natural", () => {
+    const now = new Date("2026-08-18T12:00:00Z");
+    expect(formatRelativeDate("2026-08-15T12:00:00Z", now)).toBe("hace 3 días");
+    expect(formatRelativeDate("2026-08-18T07:00:00Z", now)).toBe("hace 5 horas");
+    expect(formatRelativeDate(null, now)).toBe("No disponible");
   });
 });
