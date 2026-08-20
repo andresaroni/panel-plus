@@ -82,7 +82,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       data = {
         estado: "rechazado",
         motivo_rechazo: reason,
-        error_interno: null,
+        // `error_interno` NO se limpia aqui: es la unica copia del motivo tecnico por el
+        // que el bot no pudo aplicar el pago, y borrarla al rechazar dejaba el modal en
+        // blanco y el fallo invisible. Solo se limpia al aprobar, que empieza un intento
+        // nuevo.
         procesando_token: null,
         procesando_hasta: null,
         notificado_at: null,

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bot,
   Database,
+  Landmark,
   LayoutGrid,
   LogOut,
   Menu,
@@ -23,6 +24,7 @@ import type { CurrentUser } from "@/lib/session";
 const titles: Record<string, string> = {
   solicitudes: "Solicitudes",
   plataformas: "Base de datos de plataformas",
+  bancos: "Base de datos de bancos",
   usuarios: "Usuarios y roles",
   reportes: "Reportes",
   asistente: "Asistente IA",
@@ -42,6 +44,7 @@ export function PanelShell({ user, children }: { user: CurrentUser; children: Re
   const nav = [
     { href: "/solicitudes", label: "Solicitudes", icon: LayoutGrid },
     { href: "/plataformas", label: "Plataformas", icon: Database },
+    { href: "/bancos", label: "Bancos", icon: Landmark },
     ...(user.role === "administrador"
       ? [
           { href: "/usuarios", label: "Usuarios y roles", icon: Users },

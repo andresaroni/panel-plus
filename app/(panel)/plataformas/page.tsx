@@ -3,7 +3,11 @@ import Form from "next/form";
 import Link from "next/link";
 
 import { MetricCard } from "@/components/metric-card";
-import { getPlatformBalances, isApuestasConfigured } from "@/lib/apuestas";
+import {
+  getPlatformBalances,
+  isApuestasConfigured,
+  type PlatformBalance,
+} from "@/lib/apuestas";
 import { formatDate, formatMoney, formatRelativeDate } from "@/lib/format";
 
 function toCents(value: { toString(): string }) {
@@ -19,24 +23,19 @@ export default async function PlatformsPage({
 
   if (!isApuestasConfigured) {
     return (
-      <div className="mx-auto max-w-7xl">
-        <PageHeading />
-        <section className="mt-7 rounded-2xl border bg-card p-10 text-center">
-          <span className="mx-auto flex size-11 items-center justify-center rounded-xl bg-secondary">
-            <TriangleAlert className="size-5" aria-hidden="true" />
-          </span>
-          <h3 className="mt-4 font-semibold">Consulta no disponible</h3>
-          <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
-            Falta definir <code className="font-mono">APUESTAS_DATABASE_URL</code> en el
-            entorno. Es la conexión a la base donde viven las plataformas, su inventario de
-            saldos y las sucursales.
-          </p>
-        </section>
-      </div>
+      <Unavailable detail="Falta definir APUESTAS_DATABASE_URL en el entorno del servidor." />
     );
   }
 
-  const balances = await getPlatformBalances();
+  let balances: PlatformBalance[];
+  try {
+    balances = await getPlatformBalances();
+  } catch (error) {
+    console.error("No se pudo consultar la base de plataformas.", error);
+    return (
+      <Unavailable detail="No se pudo conectar con la base de plataformas. Revisa las credenciales y el acceso remoto de APUESTAS_DATABASE_URL." />
+    );
+  }
 
   const branches = [...new Set(balances.map((item) => item.branch).filter(Boolean))] as string[];
   const branch = branches.includes(params.sucursal ?? "") ? params.sucursal! : "";
@@ -185,6 +184,21 @@ function PageHeading() {
       <p className="mt-1 text-sm text-muted-foreground">
         Consulta el saldo actual de cada plataforma por sucursal. Solo lectura.
       </p>
+    </div>
+  );
+}
+
+function Unavailable({ detail }: { detail: string }) {
+  return (
+    <div className="mx-auto max-w-7xl">
+      <PageHeading />
+      <section className="mt-7 rounded-2xl border bg-card p-10 text-center">
+        <span className="mx-auto flex size-11 items-center justify-center rounded-xl bg-secondary">
+          <TriangleAlert className="size-5" aria-hidden="true" />
+        </span>
+        <h3 className="mt-4 font-semibold">Consulta no disponible</h3>
+        <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">{detail}</p>
+      </section>
     </div>
   );
 }
