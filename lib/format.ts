@@ -61,6 +61,16 @@ export function formatResponseTime(
   return presentedAt && status === "pendiente" ? "Pendiente" : "No disponible";
 }
 
+const FIVE_MINUTES = 5 * 60;
+const FIFTEEN_MINUTES = 15 * 60;
+
+export function responseTimeTone(seconds: number | null) {
+  if (seconds === null) return "text-muted-foreground";
+  if (seconds < FIVE_MINUTES) return "text-emerald-700";
+  if (seconds < FIFTEEN_MINUTES) return "text-orange-400";
+  return "text-red-600";
+}
+
 export function initials(name: string) {
   return name
     .split(" ")

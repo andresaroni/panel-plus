@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
-import { formatDate, formatMoney, formatResponseTime } from "@/lib/format";
+import { formatDate, formatMoney, formatResponseTime, responseTimeTone } from "@/lib/format";
 import {
   getReportMetrics,
   getReportPage,
@@ -141,7 +141,7 @@ export default async function ReportsPage({
           <a href={`/api/reportes/exportar?${query}`} className="inline-flex h-9 items-center justify-center rounded-lg border px-3 text-sm font-semibold hover:bg-secondary">Exportar CSV</a>
         </div>
         <div className="scrollbar-thin overflow-x-auto">
-          <table className="w-full min-w-[1480px] text-left text-sm">
+          <table className="w-full min-w-370 text-left text-sm">
             <thead className="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                  <th className="px-5 py-3">Solicitud</th><th className="px-5 py-3">Operación</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Cédula / usuario</th><th className="px-5 py-3">Plataforma / sucursal</th><th className="px-5 py-3">Banco / referencia / detalle</th><th className="px-5 py-3">Monto</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3">Creación</th><th className="px-5 py-3">Última actualización</th><th className="px-5 py-3">Tiempo de respuesta</th>
@@ -169,7 +169,7 @@ export default async function ReportsPage({
                    <td className="px-5 py-4"><StatusBadge status={record.status} /></td>
                    <td className="px-5 py-4 text-muted-foreground">{formatDate(record.createdAt)}</td>
                    <td className="px-5 py-4 text-muted-foreground">{formatDate(record.updatedAt)}</td>
-                   <td className="px-5 py-4 font-medium tabular-nums">
+                   <td className={`px-5 py-4 font-semibold tabular-nums ${responseTimeTone(record.responseTimeSeconds)}`}>
                      {formatResponseTime(record.responseTimeSeconds, record.presentedAt, record.status)}
                    </td>
                 </tr>
