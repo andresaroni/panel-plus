@@ -95,7 +95,9 @@ canceladas tampoco afectan métricas, reportes ni exportaciones.
 - Un retiro `pendiente` puede rechazarse únicamente con un motivo.
 - Un retiro `error_comprobante` permite reemplazar la imagen y aprobarlo nuevamente.
 - Para aprobarlo se exige un comprobante JPEG, PNG o WEBP de hasta 16 MiB.
-- El servidor valida los magic bytes, calcula SHA-256 y registra tamaño, MIME, agente y fecha de revisión.
+- El MIME se deriva de los magic bytes: el tipo que declara el navegador se ignora, porque proviene de la extensión o del content-provider del sistema y no del contenido.
+- Un archivo que no sea JPEG, PNG o WEBP se rechaza nombrando su formato real (HEIC, PDF...) y el intento queda registrado en los logs del servidor.
+- El servidor calcula SHA-256 y registra tamaño, MIME real, agente y fecha de revisión.
 - La actualización condicionada por estado evita que dos agentes procesen la misma solicitud.
 - Las imágenes del premio y del comprobante requieren una sesión activa.
 - El ID del usuario autenticado se registra como agente del panel y como `apuestas.usuario`.

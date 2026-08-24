@@ -65,6 +65,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Retiro inválido." }, { status: 400 });
   }
 
+  // Un comprobante rechazado no llega a escribirse en la base, asi que sin esta
+  // huella el motivo real solo se puede deducir leyendo el codigo.
+  let receipt: { nombre: string; tipoDeclarado: string; tamano: number; primerosBytes: string } | null =
+    null;
+
   try {
     const form = await readMultipart(request);
     const decision = form.get("decision");
@@ -101,7 +106,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (!(file instanceof File)) {
         return NextResponse.json({ error: "Selecciona el comprobante de pago." }, { status: 400 });
       }
-      const image = validateWithdrawalImage(new Uint8Array(await file.arrayBuffer()), file.type);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      receipt = {
+        nombre: file.name,
+        tipoDeclarado: file.type,
+        tamano: file.size,
+        primerosBytes: Buffer.from(bytes.subarray(0, 12)).toString("hex"),
+      };
+      const image = validateWithdrawalImage(bytes);
       data = {
         estado: "aprobado",
         motivo_rechazo: null,
@@ -158,7 +170,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (error instanceof PayloadTooLargeError) {
       return NextResponse.json({ error: "El archivo supera el límite de 16 MiB." }, { status: 413 });
     }
-    if (error instanceof ImageValidationError || error instanceof MultipartValidationError) {
+    if (error instanceof ImageValidationError) {
+      console.warn("Comprobante de retiro rechazado", { retiro: id, ...receipt, motivo: error.message });
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof MultipartValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
