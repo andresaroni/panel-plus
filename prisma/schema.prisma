@@ -259,6 +259,26 @@ model solicitudes_servicio {
   @@index([agente_panel_id], map: "idx_solicitudes_servicio_agente")
 }
 
+/// Un intento de aprobación cuyo comprobante el panel rechazó. Sin esto el motivo real
+/// del fallo solo vivía en los logs del servidor, que en la práctica no se consultan.
+model retiro_subida_fallida {
+  id_fallo               BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  id_retiro              BigInt   @db.UnsignedBigInt
+  agente_panel_id        Int?     @db.UnsignedInt
+  codigo                 String   @db.VarChar(16)
+  mensaje                String   @db.VarChar(500)
+  detalle                String?  @db.VarChar(1000)
+  archivo_nombre         String?  @db.VarChar(255)
+  archivo_mime_declarado String?  @db.VarChar(100)
+  archivo_tamano         Int?     @db.UnsignedInt
+  archivo_primeros_bytes String?  @db.VarChar(32)
+  archivo_sha256         String?  @db.Char(64)
+  archivo_imagen         Bytes?
+  date_create            DateTime @default(now()) @db.DateTime(0)
+
+  @@index([id_retiro, date_create], map: "idx_retiro_subida_fallida_retiro")
+}
+
 enum usuarios_rol {
   administrador
   vendedor

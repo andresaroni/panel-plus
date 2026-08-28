@@ -7,17 +7,21 @@ import { FormEvent, useState } from "react";
 
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney } from "@/lib/format";
+import { prepareReceipt } from "@/lib/receipt-encode";
 import { isWithdrawalCancellable, isWithdrawalReviewable } from "@/lib/withdrawal-state";
 
 type Item = ReturnType<typeof import("@/lib/retiros").serializeWithdrawal>;
+type UploadFailure = import("@/lib/retiros").UploadFailure;
 type Decision = "aprobado" | "rechazado";
 type PendingAction = Decision | "cancelar";
 
 export function WithdrawalModal({
   item,
+  failure = null,
   returnUrl = "/solicitudes?tipo=retiro",
 }: {
   item: Item;
+  failure?: UploadFailure | null;
   returnUrl?: string;
 }) {
   const router = useRouter();
@@ -43,6 +47,15 @@ export function WithdrawalModal({
     const data = new FormData(event.currentTarget);
     data.set("decision", decision);
 
+    // Recortar la imagen a mano era lo que hacia entrar la subida: el editor del
+    // telefono la re-codificaba a JPEG y de paso la dejaba mucho mas liviana. Esto
+    // hace lo mismo, y solo cuando el archivo no cabe o no es JPEG/PNG/WEBP, para no
+    // recomprimir sin necesidad la imagen que despues tiene que leer el OCR.
+    const receipt = data.get("comprobante");
+    if (decision === "aprobado" && receipt instanceof File && receipt.size > 0) {
+      data.set("comprobante", await prepareReceipt(receipt));
+    }
+
     try {
       const response = await fetch(`/api/retiros/${item.id}/revision`, {
         method: "POST",
@@ -50,13 +63,19 @@ export function WithdrawalModal({
       });
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
-        setError(result?.error ?? "No fue posible procesar el retiro.");
+        // Sin JSON la respuesta no viene del panel sino de algo delante (nginx, el proceso
+        // caido). Antes se mostraba el mismo texto que un 500 del panel, y esa ambiguedad
+        // fue justo lo que impidio saber que le paso a RET-0067.
+        setError(
+          result?.error ??
+            `El servidor respondió ${response.status} sin detalle. (ERR-HTTP-${response.status})`,
+        );
         return;
       }
       router.replace(returnUrl);
       router.refresh();
     } catch {
-      setError("No fue posible conectar con el servidor.");
+      setError("No fue posible conectar con el servidor. (ERR-RED)");
     } finally {
       setPending(null);
     }
@@ -155,7 +174,11 @@ export function WithdrawalModal({
             )}
             {item.ocrText && !receiptError && <Info title="Lectura OCR" text={item.ocrText} />}
             {item.rejectionReason && <Info title="Motivo de rechazo" text={item.rejectionReason} destructive />}
-            {item.internalError && !receiptError && <Info title="Error interno" text={item.internalError} destructive />}
+            {failure ? (
+              <UploadFailureInfo failure={failure} withdrawalId={item.id} />
+            ) : (
+              item.internalError && !receiptError && <Info title="Error interno" text={item.internalError} destructive />
+            )}
 
             {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -163,8 +186,12 @@ export function WithdrawalModal({
               <form onSubmit={submit} className="mt-7 space-y-5">
                 <div>
                   <label htmlFor="payment-proof" className="text-sm font-medium">{receiptError ? "Nuevo comprobante de pago" : "Comprobante para aprobar"}</label>
-                  <input id="payment-proof" name="comprobante" type="file" accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full rounded-xl border bg-background p-2 text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-2 file:font-semibold file:text-foreground" />
-                  <p className="mt-1 text-xs text-muted-foreground">JPEG, PNG o WEBP, máximo 16 MiB.</p>
+                  {/* `accept` NO se restringe al MIME que declara el navegador: ese dato sale
+                      de la extension o del content-provider del sistema y miente, asi que
+                      filtrar por el escondia comprobantes validos en el selector de fotos de
+                      Android sin dar ninguna explicacion. El servidor decide por magic bytes. */}
+                  <input id="payment-proof" name="comprobante" type="file" accept="image/*,.heic,.heif" className="mt-2 block w-full rounded-xl border bg-background p-2 text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-2 file:font-semibold file:text-foreground" />
+                  <p className="mt-1 text-xs text-muted-foreground">JPEG, PNG o WEBP. Si pesa de más se reduce sola antes de subirla.</p>
                 </div>
                 <div>
                   <label htmlFor="rejection-reason" className="text-sm font-medium">Motivo para rechazar</label>
@@ -200,6 +227,63 @@ export function WithdrawalModal({
 
 function Data({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium capitalize">{value}</dd></div>;
+}
+
+function formatSize(bytes: number | null) {
+  if (bytes === null) return null;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
+/**
+ * El último intento de subida que se rechazó. Se enseña a todos los que revisan y no
+ * sólo a un administrador porque quien está delante cuando falla es el asesor: puede
+ * dictar el código y la excepción sin que nadie tenga que entrar al servidor.
+ */
+function UploadFailureInfo({ failure, withdrawalId }: { failure: UploadFailure; withdrawalId: string }) {
+  const size = formatSize(failure.fileSize);
+  return (
+    <div role="alert" className="mt-5 rounded-xl border bg-red-50 p-4 text-red-800">
+      <p className="text-sm font-medium">La última subida del comprobante falló</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{failure.message}</p>
+      <dl className="mt-3 grid gap-1 rounded-lg bg-white/60 p-3 text-xs">
+        <div className="flex gap-2">
+          <dt className="font-medium">Código</dt>
+          <dd className="font-mono">{failure.code}</dd>
+        </div>
+        {failure.detail && (
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-medium">Detalle</dt>
+            <dd className="break-all font-mono">{failure.detail}</dd>
+          </div>
+        )}
+        {failure.fileName && (
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-medium">Archivo</dt>
+            <dd className="break-all">
+              {failure.fileName}
+              {failure.fileDeclaredMime ? ` · ${failure.fileDeclaredMime}` : ""}
+              {size ? ` · ${size}` : ""}
+            </dd>
+          </div>
+        )}
+        {failure.fileMagicBytes && (
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-medium">Primeros bytes</dt>
+            <dd className="font-mono">{failure.fileMagicBytes}</dd>
+          </div>
+        )}
+      </dl>
+      {failure.hasFile && (
+        <a
+          href={`/api/retiros/${withdrawalId}/subida-fallida/${failure.id}`}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-red-100"
+        >
+          <ImageIcon className="size-4" /> Descargar el archivo rechazado
+        </a>
+      )}
+    </div>
+  );
 }
 
 function Info({ title, text, destructive = false }: { title: string; text: string; destructive?: boolean }) {

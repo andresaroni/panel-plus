@@ -94,9 +94,16 @@ canceladas tampoco afectan métricas, reportes ni exportaciones.
 
 - Un retiro `pendiente` puede rechazarse únicamente con un motivo.
 - Un retiro `error_comprobante` permite reemplazar la imagen y aprobarlo nuevamente.
-- Para aprobarlo se exige un comprobante JPEG, PNG o WEBP de hasta 16 MiB.
-- El MIME se deriva de los magic bytes: el tipo que declara el navegador se ignora, porque proviene de la extensión o del content-provider del sistema y no del contenido.
-- Un archivo que no sea JPEG, PNG o WEBP se rechaza nombrando su formato real (HEIC, PDF...) y el intento queda registrado en los logs del servidor.
+- Para aprobarlo se exige un comprobante JPEG, PNG o WEBP.
+- El panel se despliega en **Vercel** desde GitHub. Eso fija el techo de una subida: el cuerpo de una petición a una Serverless Function no puede pasar de ~4,5 MB, y al superarlo corta el edge de Vercel **antes de ejecutar la función**, sin log, sin escritura en base y con una respuesta que no es JSON. Por eso el límite de la petición está en 4 MiB: para que el rechazo lo demos nosotros con un mensaje útil y nunca Vercel en silencio.
+- El límite de almacenamiento es `PANEL_MAX_STORED_IMAGE_BYTES` (3 MiB por defecto). **No lo impone la base**: el `max_allowed_packet` del MySQL de producción es 1 GB. Lo impone WhatsApp, que rechaza imágenes de más de unos 5 MB; como el comprobante se le envía al cliente *después* de aplicar el pago, aceptar una imagen que Meta no acepte deja un retiro pagado cuyo comprobante no se puede entregar.
+- El navegador encoge el comprobante por encima de 1 MiB antes de subirlo, un umbral más bajo que el del servidor: no es una validación, es que el agente suele subir desde el móvil con datos. Si ya es JPEG, PNG o WEBP y no llega a ese tamaño, se sube intacto para no degradar con una recompresión la imagen que después lee el OCR. Esto automatiza el recorte que los agentes hacían a mano.
+- El MIME se deriva de los magic bytes: el tipo que declara el navegador se ignora, porque proviene de la extensión o del content-provider del sistema y no del contenido. Por el mismo motivo el selector de archivos no filtra por ese MIME, que escondía comprobantes válidos sin dar ninguna explicación.
+- Un archivo que no sea JPEG, PNG o WEBP se rechaza nombrando su formato real (HEIC, PDF...). El formato se comprueba antes que el tamaño, para que a un HEIC pesado se le diga que lo guarde como JPEG y no que pesa mucho.
+- Todo rechazo lleva un código corto al final del mensaje (`ERR-IMG`, `ERR-FORM`, `ERR-BIG`, `ERR-DUP`, `ERR-DB`, `ERR-SRV`) que el agente puede dictar sin acceso a los logs. Si la respuesta no llega a ser JSON —un 502 de nginx, el proceso caído— el mensaje muestra `ERR-HTTP-<estado>`, que distingue «el panel falló» de «la petición no llegó».
+- Cada intento fallido se guarda en `retiro_subida_fallida` con la excepción real, la huella del archivo (nombre, MIME declarado, tamaño, primeros 12 bytes en hexadecimal, SHA-256) y el archivo mismo. El modal lo enseña a todos los que revisan, con un enlace para descargarlo. **El motivo de un fallo nunca vive solo en los logs del servidor**: en la práctica no se consultan, y por eso hubo fallos que quedaron sin explicación.
+- Retención: se conservan los 5 últimos intentos por retiro, los bytes solo por debajo del tope admitido, y solo se muestran los intentos posteriores a la última revisión. Los anteriores quedan como historial. Ver en `DESPLIEGUE_VPS.md` la purga por antigüedad.
+- Una versión compacta del fallo queda además en `retirar_saldo.error_interno`, con un `UPDATE` que no incluye la imagen para que entre aunque lo que falle sea escribir el BLOB. La aprobación siguiente lo limpia.
 - El servidor calcula SHA-256 y registra tamaño, MIME real, agente y fecha de revisión.
 - La actualización condicionada por estado evita que dos agentes procesen la misma solicitud.
 - Las imágenes del premio y del comprobante requieren una sesión activa.

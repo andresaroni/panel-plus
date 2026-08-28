@@ -2,6 +2,8 @@ import "server-only";
 
 import { Prisma, type retirar_saldo_estado } from "@prisma/client";
 
+import { prisma } from "@/lib/prisma";
+
 export const withdrawalSelect = {
   id_retiro: true,
   operacion_uuid: true,
@@ -127,5 +129,78 @@ export function serializeWithdrawal(item: WithdrawalRecord) {
     internalError: item.error_interno,
     createdAt: item.date_create.toISOString(),
     updatedAt: item.date_update.toISOString(),
+  };
+}
+
+type UploadFailureRow = {
+  id_fallo: bigint;
+  codigo: string;
+  mensaje: string;
+  detalle: string | null;
+  archivo_nombre: string | null;
+  archivo_mime_declarado: string | null;
+  // El driver crudo puede devolver los enteros como BigInt, así que nada de esto se
+  // usa sin convertir: mezclar BigInt con Number en una resta o división lanza.
+  archivo_tamano: number | bigint | null;
+  archivo_primeros_bytes: string | null;
+  archivo_sha256: string | null;
+  tiene_archivo: number | bigint;
+  date_create: Date;
+};
+
+export type UploadFailure = {
+  id: string;
+  code: string;
+  message: string;
+  detail: string | null;
+  fileName: string | null;
+  fileDeclaredMime: string | null;
+  fileSize: number | null;
+  fileMagicBytes: string | null;
+  fileSha256: string | null;
+  hasFile: boolean;
+  at: string;
+};
+
+/**
+ * Último intento de subida que el panel rechazó, para enseñarlo en el modal.
+ *
+ * Va en SQL crudo a propósito: hace falta saber si quedaron bytes guardados sin
+ * traerse el BLOB, y `archivo_imagen IS NOT NULL` lo resuelve en el servidor. Un
+ * `select` de Prisma obligaría a elegir entre descargar la imagen entera o deducir su
+ * presencia a partir del tamaño, que es una regla que puede quedar desfasada.
+ */
+export async function getLastUploadFailure(
+  withdrawalId: bigint,
+  reviewedAt: Date | null,
+): Promise<UploadFailure | null> {
+  // Los intentos anteriores a la última revisión ya no describen la situación actual:
+  // si el agente acabó subiendo un comprobante válido, seguir enseñando el fallo diría
+  // que algo va mal cuando no es así. Se conservan en la tabla como historial.
+  const rows = await prisma.$queryRaw<UploadFailureRow[]>`
+    SELECT id_fallo, codigo, mensaje, detalle, archivo_nombre, archivo_mime_declarado,
+           archivo_tamano, archivo_primeros_bytes, archivo_sha256,
+           archivo_imagen IS NOT NULL AS tiene_archivo, date_create
+    FROM retiro_subida_fallida
+    WHERE id_retiro = ${withdrawalId}
+      AND (${reviewedAt} IS NULL OR date_create > ${reviewedAt})
+    ORDER BY id_fallo DESC
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    id: row.id_fallo.toString(),
+    code: row.codigo,
+    message: row.mensaje,
+    detail: row.detalle,
+    fileName: row.archivo_nombre,
+    fileDeclaredMime: row.archivo_mime_declarado,
+    fileSize: row.archivo_tamano === null ? null : Number(row.archivo_tamano),
+    fileMagicBytes: row.archivo_primeros_bytes,
+    fileSha256: row.archivo_sha256,
+    hasFile: Number(row.tiene_archivo) === 1,
+    at: row.date_create.toISOString(),
   };
 }

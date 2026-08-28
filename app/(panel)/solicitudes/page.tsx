@@ -28,6 +28,7 @@ import {
   type OperationFilter,
 } from "@/lib/solicitudes";
 import {
+  getLastUploadFailure,
   serializeWithdrawal,
   submittedWithdrawalWhere,
   withdrawalSelect,
@@ -95,6 +96,12 @@ export default async function RequestsPage({
         })
       : null,
   ]);
+
+  // El ultimo intento de subida rechazado: es lo unico que explica por que un retiro
+  // sigue pendiente despues de que el asesor haya intentado aprobarlo.
+  const withdrawalFailure = selectedWithdrawal
+    ? await getLastUploadFailure(selectedWithdrawal.id_retiro, selectedWithdrawal.revisado_at)
+    : null;
 
   const listParams = (overrides: Record<string, string> = {}) =>
     new URLSearchParams({
@@ -232,7 +239,7 @@ export default async function RequestsPage({
       </section>
 
       {selectedTopUp && <ReviewModal item={serializeRequest(selectedTopUp)} returnUrl={returnUrl} />}
-      {selectedWithdrawal && <WithdrawalModal item={serializeWithdrawal(selectedWithdrawal)} returnUrl={returnUrl} />}
+      {selectedWithdrawal && <WithdrawalModal item={serializeWithdrawal(selectedWithdrawal)} failure={withdrawalFailure} returnUrl={returnUrl} />}
       {selectedServiceRequest && <ServiceRequestModal item={serializeServiceRequest(selectedServiceRequest)} returnUrl={returnUrl} />}
     </div>
   );
