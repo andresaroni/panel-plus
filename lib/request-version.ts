@@ -2,12 +2,22 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { escalatedFailedReceiptWhere } from "@/lib/failed-receipts";
 import { prisma } from "@/lib/prisma";
 import { submittedTopUpWhere } from "@/lib/recargas";
 import { submittedWithdrawalWhere } from "@/lib/retiros";
 
 export async function getRequestsVersion() {
-  const [topUps, topUpStates, withdrawals, withdrawalStates, services, serviceStates] = await Promise.all([
+  const [
+    topUps,
+    topUpStates,
+    withdrawals,
+    withdrawalStates,
+    services,
+    serviceStates,
+    failedReceipts,
+    failedReceiptStates,
+  ] = await Promise.all([
     prisma.recarga_whatsapp.aggregate({
       where: submittedTopUpWhere,
       _count: { _all: true },
@@ -39,6 +49,17 @@ export async function getRequestsVersion() {
       _count: { _all: true },
       orderBy: { estado: "asc" },
     }),
+    prisma.recarga_comprobante_fallido.aggregate({
+      where: escalatedFailedReceiptWhere,
+      _count: { _all: true },
+      _max: { id_fallo: true, date_update: true },
+    }),
+    prisma.recarga_comprobante_fallido.groupBy({
+      where: escalatedFailedReceiptWhere,
+      by: ["estado"],
+      _count: { _all: true },
+      orderBy: { estado: "asc" },
+    }),
   ]);
 
   const fingerprint = JSON.stringify({
@@ -59,6 +80,12 @@ export async function getRequestsVersion() {
       lastId: services._max.id_solicitud?.toString() ?? "0",
       updatedAt: services._max.date_update?.toISOString() ?? null,
       states: serviceStates.map((item) => [item.estado, item._count._all]),
+    },
+    failedReceipts: {
+      count: failedReceipts._count._all,
+      lastId: failedReceipts._max.id_fallo?.toString() ?? "0",
+      updatedAt: failedReceipts._max.date_update?.toISOString() ?? null,
+      states: failedReceiptStates.map((item) => [item.estado, item._count._all]),
     },
   });
 

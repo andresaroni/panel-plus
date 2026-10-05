@@ -7,6 +7,8 @@ const styles = {
   pagado: "bg-yellow-100 text-yellow-900",
   cancelado: "bg-zinc-100 text-zinc-600",
   atendido: "bg-yellow-100 text-yellow-900",
+  reintento: "bg-slate-100 text-slate-600",
+  descartado: "bg-zinc-100 text-zinc-600",
 };
 
 const labels = {
@@ -18,6 +20,8 @@ const labels = {
   pagado: "Pagada",
   cancelado: "Cancelada",
   atendido: "Atendida",
+  reintento: "En reintento",
+  descartado: "Descartada",
 };
 
 export type Status = keyof typeof styles;

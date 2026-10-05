@@ -279,6 +279,70 @@ model retiro_subida_fallida {
   @@index([id_retiro, date_create], map: "idx_retiro_subida_fallida_retiro")
 }
 
+/// Comprobante de recarga que el bot no pudo leer o validar. El bot lo escala al panel
+/// (estado `pendiente`) tras el segundo intento fallido, o de inmediato si el fallo no
+/// depende del cliente. Las filas `reintento` solo sirven de historial del caso.
+model recarga_comprobante_fallido {
+  id_fallo               BigInt                             @id @default(autoincrement()) @db.UnsignedBigInt
+  operacion_uuid         String                             @unique(map: "uq_comprobante_fallido_uuid") @db.Char(36)
+  conversacion_id        BigInt                             @db.UnsignedBigInt
+  telefono_whatsapp      String                             @db.VarChar(20)
+  whatsapp_message_id    String?                            @unique(map: "uq_comprobante_fallido_message") @db.VarChar(255)
+  intento                Int                                @default(1) @db.UnsignedSmallInt
+  cliente_id             Int?
+  cliente_cedula         String?                            @db.VarChar(10)
+  cliente_usuario        String?                            @db.VarChar(25)
+  cliente_nombres        String?                            @db.VarChar(100)
+  sucursal_id            Int?
+  sucursal_nombre        String?                            @db.VarChar(50)
+  plataforma_id          Int?
+  plataforma_nombre      String?                            @db.VarChar(30)
+  motivo                 recarga_comprobante_fallido_motivo
+  detalle                String?                            @db.VarChar(500)
+  lecturas               String?                            @db.Text
+  monto                  Decimal?                           @db.Decimal(10, 2)
+  numero_comprobante     BigInt?
+  banco_nombre_detectado String?                            @db.VarChar(100)
+  beneficiario_detectado String?                            @db.VarChar(150)
+  cuenta_detectada       String?                            @db.VarChar(50)
+  comprobante_imagen     Bytes?
+  comprobante_mime       String?                            @db.VarChar(100)
+  comprobante_sha256     String?                            @db.Char(64)
+  comprobante_tamano     Int?                               @db.UnsignedInt
+  mensaje_cliente        String?                            @db.VarChar(500)
+  estado                 recarga_comprobante_fallido_estado @default(reintento)
+  agente_panel_id        Int?                               @db.UnsignedInt
+  atendido_at            DateTime?                          @db.DateTime(0)
+  presentado_panel_at    DateTime?                          @db.DateTime(0)
+  primera_respuesta_at   DateTime?                          @db.DateTime(0)
+  date_create            DateTime                           @default(now()) @db.DateTime(0)
+  date_update            DateTime                           @default(now()) @db.DateTime(0)
+
+  @@index([estado, date_create], map: "idx_comprobante_fallido_estado")
+  @@index([conversacion_id], map: "idx_comprobante_fallido_conversacion")
+  @@index([telefono_whatsapp, date_create], map: "idx_comprobante_fallido_telefono")
+  @@index([presentado_panel_at], map: "idx_comprobante_fallido_presentado")
+}
+
+enum recarga_comprobante_fallido_motivo {
+  descarga_fallida
+  proveedor_no_disponible
+  ilegible
+  campos_faltantes
+  cuenta_no_validada
+  duplicado_registro
+  duplicado_reporte
+  sin_saldo_plataforma
+  error_interno
+}
+
+enum recarga_comprobante_fallido_estado {
+  reintento
+  pendiente
+  atendido
+  descartado
+}
+
 enum usuarios_rol {
   administrador
   vendedor
@@ -342,6 +406,7 @@ enum panel_push_request_type {
   recarga
   retiro
   servicio
+  comprobante
 }
 
 enum panel_push_events_estado {

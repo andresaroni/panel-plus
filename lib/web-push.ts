@@ -5,7 +5,7 @@ import webPush, { type PushSubscription } from "web-push";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 
-export type RequestPushType = "recarga" | "retiro" | "servicio";
+export type RequestPushType = "recarga" | "retiro" | "servicio" | "comprobante";
 
 export type RequestPushMessage = {
   title: string;

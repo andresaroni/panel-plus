@@ -5,18 +5,21 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
+  FileWarning,
   MessageCircle,
   Search,
 } from "lucide-react";
 import Link from "next/link";
 import Form from "next/form";
 
+import { FailedReceiptModal } from "@/components/failed-receipt-modal";
 import { LiveRequests } from "@/components/live-requests";
 import { MetricCard } from "@/components/metric-card";
 import { ReviewModal } from "@/components/review-modal";
 import { ServiceRequestModal } from "@/components/service-request-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { WithdrawalModal } from "@/components/withdrawal-modal";
+import { getFailedReceiptCase } from "@/lib/failed-receipts";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requestSelect, serializeRequest, submittedTopUpWhere } from "@/lib/recargas";
@@ -50,7 +53,7 @@ export default async function RequestsPage({
 }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
-  const operation: OperationFilter = ["recarga", "retiro", "servicio"].includes(params.tipo ?? "")
+  const operation: OperationFilter = ["recarga", "retiro", "servicio", "comprobante"].includes(params.tipo ?? "")
     ? (params.tipo as OperationFilter)
     : "todas";
   const page = Math.min(100, Math.max(1, Number(params.page) || 1));
@@ -72,7 +75,7 @@ export default async function RequestsPage({
   const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
   const validReviewId = params.review && /^\d{1,20}$/.test(params.review);
 
-  const [selectedTopUp, selectedServiceRequest, selectedWithdrawal] = await Promise.all([
+  const [selectedTopUp, selectedServiceRequest, selectedWithdrawal, selectedFailedReceipt] = await Promise.all([
     validReviewId && params.reviewType === "recarga"
       ? prisma.recarga_whatsapp.findFirst({
           where: {
@@ -95,6 +98,9 @@ export default async function RequestsPage({
           select: withdrawalSelect,
         })
       : null,
+    validReviewId && params.reviewType === "comprobante"
+      ? getFailedReceiptCase(BigInt(params.review!))
+      : null,
   ]);
 
   // El ultimo intento de subida rechazado: es lo unico que explica por que un retiro
@@ -112,10 +118,15 @@ export default async function RequestsPage({
   const returnUrl = `/solicitudes${listParams({ page: String(page) }) ? `?${listParams({ page: String(page) })}` : ""}`;
 
   const tabs: { value: OperationFilter; label: string; count: number }[] = [
-    { value: "todas", label: "Todas", count: list.topUpCount + list.withdrawalCount + list.serviceCount },
+    {
+      value: "todas",
+      label: "Todas",
+      count: list.topUpCount + list.withdrawalCount + list.serviceCount + list.failedReceiptCount,
+    },
     { value: "recarga", label: "Recargas", count: list.topUpCount },
     { value: "retiro", label: "Retiros", count: list.withdrawalCount },
     { value: "servicio", label: "Servicios", count: list.serviceCount },
+    { value: "comprobante", label: "No leídos", count: list.failedReceiptCount },
   ];
 
   return (
@@ -124,7 +135,7 @@ export default async function RequestsPage({
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Centro de solicitudes</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gestiona recargas, retiros y solicitudes de servicio desde una sola bandeja.
+            Gestiona recargas, retiros, solicitudes de servicio y comprobantes no leídos desde una sola bandeja.
           </p>
         </div>
         <LiveRequests
@@ -132,7 +143,8 @@ export default async function RequestsPage({
           paused={Boolean(
             selectedTopUp ||
             (selectedWithdrawal && isWithdrawalReviewable(selectedWithdrawal.estado)) ||
-            selectedServiceRequest?.estado === "pendiente"
+            selectedServiceRequest?.estado === "pendiente" ||
+            selectedFailedReceipt?.status === "pendiente"
           )}
         />
       </div>
@@ -195,7 +207,7 @@ export default async function RequestsPage({
             </thead>
             <tbody className="divide-y">
               {list.items.map((item) => {
-                const prefix = item.type === "recarga" ? "REC" : item.type === "retiro" ? "RET" : "SER";
+                const prefix = { recarga: "REC", retiro: "RET", servicio: "SER", comprobante: "CMP" }[item.type];
                 return (
                   <tr key={item.key} className="hover:bg-secondary/25">
                     <td className="px-5 py-4">
@@ -204,19 +216,19 @@ export default async function RequestsPage({
                     </td>
                     <td className="px-5 py-4">
                       <span className="flex items-center gap-1.5">
-                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : <MessageCircle className="size-4 text-primary" />}
-                        {item.type === "recarga" ? "Recarga" : item.type === "retiro" ? "Retiro" : "Servicio"}
+                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : item.type === "comprobante" ? <FileWarning className="size-4 text-orange-600" /> : <MessageCircle className="size-4 text-primary" />}
+                        {{ recarga: "Recarga", retiro: "Retiro", servicio: "Servicio", comprobante: "Comprobante no leído" }[item.type]}
                       </span>
                     </td>
                     <td className="px-5 py-4 capitalize">{item.platform}</td>
-                    <td className="px-5 py-4 font-semibold tabular-nums">{item.amount === null ? "No aplica" : formatMoney(item.amount)}</td>
+                    <td className="px-5 py-4 font-semibold tabular-nums">{item.amount === null ? (item.type === "comprobante" ? "No leído" : "No aplica") : formatMoney(item.amount)}</td>
                     <td className="px-5 py-4"><StatusBadge status={item.status} /></td>
                     <td className="px-5 py-4">
                       <Link
                         href={`/solicitudes?${listParams({ page: String(page), reviewType: item.type, review: item.id })}`}
                         className="inline-flex rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-secondary"
                       >
-                        {item.type === "servicio" && item.status === "pendiente" ? "Atender" : item.status === "pendiente" || item.status === "error_comprobante" ? "Revisar" : "Ver detalle"}
+                        {(item.type === "servicio" || item.type === "comprobante") && item.status === "pendiente" ? "Atender" : item.status === "pendiente" || item.status === "error_comprobante" ? "Revisar" : "Ver detalle"}
                       </Link>
                     </td>
                   </tr>
@@ -241,6 +253,7 @@ export default async function RequestsPage({
       {selectedTopUp && <ReviewModal item={serializeRequest(selectedTopUp)} returnUrl={returnUrl} />}
       {selectedWithdrawal && <WithdrawalModal item={serializeWithdrawal(selectedWithdrawal)} failure={withdrawalFailure} returnUrl={returnUrl} />}
       {selectedServiceRequest && <ServiceRequestModal item={serializeServiceRequest(selectedServiceRequest)} returnUrl={returnUrl} />}
+      {selectedFailedReceipt && <FailedReceiptModal item={selectedFailedReceipt} returnUrl={returnUrl} />}
     </div>
   );
 }

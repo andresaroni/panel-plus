@@ -16,7 +16,7 @@ import {
 export const runtime = "nodejs";
 
 const inputSchema = z.object({
-  type: z.enum(["recarga", "retiro", "servicio"]),
+  type: z.enum(["recarga", "retiro", "servicio", "comprobante"]),
   id: z.string().regex(/^\d{1,20}$/),
 });
 
@@ -54,6 +54,20 @@ async function requestMessage(type: RequestPushType, id: bigint): Promise<Reques
       body: "Hay un retiro pendiente de revisión.",
       url: `/solicitudes?reviewType=retiro&review=${id}`,
       tag: `solicitud-retiro-${id}`,
+    };
+  }
+
+  if (type === "comprobante") {
+    const exists = await prisma.recarga_comprobante_fallido.findFirst({
+      where: { id_fallo: id, estado: "pendiente" },
+      select: { id_fallo: true },
+    });
+    if (!exists) return null;
+    return {
+      title: "Comprobante no leído",
+      body: "El bot no pudo validar un comprobante de recarga y el cliente espera a un asesor.",
+      url: `/solicitudes?reviewType=comprobante&review=${id}`,
+      tag: `solicitud-comprobante-${id}`,
     };
   }
 

@@ -1,6 +1,11 @@
 import "server-only";
 
 import type { Status } from "@/components/status-badge";
+import {
+  buildFailedReceiptWhere,
+  escalatedFailedReceiptWhere,
+  failedReceiptSelect,
+} from "@/lib/failed-receipts";
 import { prisma } from "@/lib/prisma";
 import { buildSearchWhere, requestSelect, submittedTopUpWhere } from "@/lib/recargas";
 import {
@@ -13,11 +18,11 @@ import {
   withdrawalSelect,
 } from "@/lib/retiros";
 
-export type OperationFilter = "todas" | "recarga" | "retiro" | "servicio";
+export type OperationFilter = "todas" | "recarga" | "retiro" | "servicio" | "comprobante";
 
 export type UnifiedRequest = {
   key: string;
-  type: "recarga" | "retiro" | "servicio";
+  type: "recarga" | "retiro" | "servicio" | "comprobante";
   id: string;
   client: string;
   username: string;
@@ -42,11 +47,22 @@ export async function getUnifiedRequests({
   const includeTopUps = operation === "todas" || operation === "recarga";
   const includeWithdrawals = operation === "todas" || operation === "retiro";
   const includeServices = operation === "todas" || operation === "servicio";
+  const includeFailedReceipts = operation === "todas" || operation === "comprobante";
   const topUpWhere = buildSearchWhere(query);
   const withdrawalWhere = buildWithdrawalWhere(query);
   const serviceWhere = buildServiceRequestWhere(query);
+  const failedReceiptWhere = buildFailedReceiptWhere(query);
 
-  const [topUps, withdrawals, services, topUpCount, withdrawalCount, serviceCount] = await Promise.all([
+  const [
+    topUps,
+    withdrawals,
+    services,
+    failedReceipts,
+    topUpCount,
+    withdrawalCount,
+    serviceCount,
+    failedReceiptCount,
+  ] = await Promise.all([
     includeTopUps
       ? prisma.recarga_whatsapp.findMany({
           where: topUpWhere,
@@ -71,9 +87,18 @@ export async function getUnifiedRequests({
           take,
         })
       : [],
+    includeFailedReceipts
+      ? prisma.recarga_comprobante_fallido.findMany({
+          where: failedReceiptWhere,
+          select: failedReceiptSelect,
+          orderBy: { date_create: "desc" },
+          take,
+        })
+      : [],
     prisma.recarga_whatsapp.count({ where: topUpWhere }),
     prisma.retirar_saldo.count({ where: withdrawalWhere }),
     prisma.solicitudes_servicio.count({ where: serviceWhere }),
+    prisma.recarga_comprobante_fallido.count({ where: failedReceiptWhere }),
   ]);
 
   const combined: UnifiedRequest[] = [
@@ -112,6 +137,17 @@ export async function getUnifiedRequests({
       status: item.estado,
       createdAt: item.date_create,
     })),
+    ...failedReceipts.map((item) => ({
+      key: `comprobante-${item.id_fallo}`,
+      type: "comprobante" as const,
+      id: item.id_fallo.toString(),
+      client: item.cliente_nombres ?? "Cliente sin nombre",
+      username: item.cliente_usuario ?? "sin-usuario",
+      platform: item.plataforma_nombre ?? "No disponible",
+      amount: item.monto?.toString() ?? null,
+      status: item.estado,
+      createdAt: item.date_create,
+    })),
   ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
   const total =
@@ -121,7 +157,9 @@ export async function getUnifiedRequests({
         ? withdrawalCount
         : operation === "servicio"
           ? serviceCount
-          : topUpCount + withdrawalCount + serviceCount;
+          : operation === "comprobante"
+            ? failedReceiptCount
+            : topUpCount + withdrawalCount + serviceCount + failedReceiptCount;
   const offset = (page - 1) * pageSize;
   return {
     items: combined.slice(offset, offset + pageSize),
@@ -129,6 +167,7 @@ export async function getUnifiedRequests({
     topUpCount,
     withdrawalCount,
     serviceCount,
+    failedReceiptCount,
   };
 }
 
@@ -144,6 +183,8 @@ export async function getRequestMetrics(dayStart: Date, dayEnd: Date) {
     totalWithdrawals,
     pendingServices,
     totalServices,
+    pendingFailedReceipts,
+    totalFailedReceipts,
   ] = await Promise.all([
     prisma.recarga_whatsapp.count({
       where: { AND: [submittedTopUpWhere, { estado: "pendiente" }] },
@@ -177,14 +218,16 @@ export async function getRequestMetrics(dayStart: Date, dayEnd: Date) {
     prisma.retirar_saldo.count({ where: submittedWithdrawalWhere }),
     prisma.solicitudes_servicio.count({ where: { estado: "pendiente" } }),
     prisma.solicitudes_servicio.count(),
+    prisma.recarga_comprobante_fallido.count({ where: { estado: "pendiente" } }),
+    prisma.recarga_comprobante_fallido.count({ where: escalatedFailedReceiptWhere }),
   ]);
 
   return {
-    pending: pendingTopUps + pendingWithdrawals + pendingServices,
+    pending: pendingTopUps + pendingWithdrawals + pendingServices + pendingFailedReceipts,
     approvedToday: approvedTopUpsToday + approvedWithdrawalsToday,
     volume:
       Number(topUpVolume._sum.monto?.toString() ?? 0) +
       Number(withdrawalVolume._sum.monto?.toString() ?? 0),
-    total: totalTopUps + totalWithdrawals + totalServices,
+    total: totalTopUps + totalWithdrawals + totalServices + totalFailedReceipts,
   };
 }
