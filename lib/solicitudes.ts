@@ -171,7 +171,13 @@ export async function getUnifiedRequests({
   };
 }
 
-export async function getRequestMetrics(dayStart: Date, dayEnd: Date) {
+export async function getRequestMetrics(
+  dayStart: Date,
+  dayEnd: Date,
+  monthStart: Date,
+  monthEnd: Date,
+) {
+  const month = { gte: monthStart, lte: monthEnd };
   const [
     pendingTopUps,
     pendingWithdrawals,
@@ -207,27 +213,33 @@ export async function getRequestMetrics(dayStart: Date, dayEnd: Date) {
       },
     }),
     prisma.recarga_whatsapp.aggregate({
-      where: { AND: [submittedTopUpWhere, { estado: "aprobado" }] },
+      where: { AND: [submittedTopUpWhere, { estado: "aprobado", date_update: month }] },
       _sum: { monto: true },
     }),
     prisma.retirar_saldo.aggregate({
-      where: { estado: { in: ["aprobado", "pagado"] } },
+      where: { estado: { in: ["aprobado", "pagado"] }, revisado_at: month },
       _sum: { monto: true },
     }),
-    prisma.recarga_whatsapp.count({ where: submittedTopUpWhere }),
-    prisma.retirar_saldo.count({ where: submittedWithdrawalWhere }),
+    prisma.recarga_whatsapp.count({
+      where: { AND: [submittedTopUpWhere, { date_create: month }] },
+    }),
+    prisma.retirar_saldo.count({
+      where: { AND: [submittedWithdrawalWhere, { date_create: month }] },
+    }),
     prisma.solicitudes_servicio.count({ where: { estado: "pendiente" } }),
-    prisma.solicitudes_servicio.count(),
+    prisma.solicitudes_servicio.count({ where: { date_create: month } }),
     prisma.recarga_comprobante_fallido.count({ where: { estado: "pendiente" } }),
-    prisma.recarga_comprobante_fallido.count({ where: escalatedFailedReceiptWhere }),
+    prisma.recarga_comprobante_fallido.count({
+      where: { AND: [escalatedFailedReceiptWhere, { date_create: month }] },
+    }),
   ]);
 
   return {
     pending: pendingTopUps + pendingWithdrawals + pendingServices + pendingFailedReceipts,
     approvedToday: approvedTopUpsToday + approvedWithdrawalsToday,
-    volume:
+    volumeMonth:
       Number(topUpVolume._sum.monto?.toString() ?? 0) +
       Number(withdrawalVolume._sum.monto?.toString() ?? 0),
-    total: totalTopUps + totalWithdrawals + totalServices + totalFailedReceipts,
+    totalMonth: totalTopUps + totalWithdrawals + totalServices + totalFailedReceipts,
   };
 }

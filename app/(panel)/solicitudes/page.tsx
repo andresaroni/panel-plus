@@ -66,10 +66,15 @@ export default async function RequestsPage({
   }).format(new Date());
   const dayStart = new Date(`${day}T00:00:00-05:00`);
   const dayEnd = new Date(`${day}T23:59:59-05:00`);
+  const [year, month] = day.split("-").map(Number);
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const monthStart = new Date(`${monthPrefix}-01T00:00:00-05:00`);
+  const monthEnd = new Date(`${monthPrefix}-${String(lastDay).padStart(2, "0")}T23:59:59-05:00`);
 
   const [list, metrics, initialVersion] = await Promise.all([
     getUnifiedRequests({ query, operation, page, pageSize: PAGE_SIZE }),
-    getRequestMetrics(dayStart, dayEnd),
+    getRequestMetrics(dayStart, dayEnd, monthStart, monthEnd),
     getRequestsVersion(),
   ]);
   const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
@@ -152,8 +157,8 @@ export default async function RequestsPage({
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Por revisar" value={String(metrics.pending).padStart(2, "0")} detail="Operaciones y servicios pendientes" icon={Clock3} />
         <MetricCard label="Aprobadas" value={String(metrics.approvedToday).padStart(2, "0")} detail="Durante esta jornada" icon={Check} />
-        <MetricCard label="Volumen gestionado" value={formatMoney(metrics.volume)} detail="Operaciones aprobadas" icon={CircleDollarSign} />
-        <MetricCard label="Solicitudes" value={String(metrics.total).padStart(2, "0")} detail="Registros totales" icon={FileText} />
+        <MetricCard label="Volumen gestionado" value={formatMoney(metrics.volumeMonth)} detail="Aprobado este mes" icon={CircleDollarSign} />
+        <MetricCard label="Solicitudes" value={String(metrics.totalMonth).padStart(2, "0")} detail="Registradas este mes" icon={FileText} />
       </div>
 
       <section className="mt-7 overflow-hidden rounded-2xl border bg-card">
