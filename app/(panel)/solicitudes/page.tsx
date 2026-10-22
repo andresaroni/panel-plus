@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import Form from "next/form";
 
+import { DeleteFailedReceiptButton } from "@/components/delete-failed-receipt-button";
 import { FailedReceiptModal } from "@/components/failed-receipt-modal";
 import { LiveRequests } from "@/components/live-requests";
 import { MetricCard } from "@/components/metric-card";
@@ -24,6 +25,7 @@ import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requestSelect, serializeRequest, submittedTopUpWhere } from "@/lib/recargas";
 import { getRequestsVersion } from "@/lib/request-version";
+import { getCurrentUser } from "@/lib/session";
 import { serializeServiceRequest, serviceRequestSelect } from "@/lib/service-requests";
 import {
   getRequestMetrics,
@@ -72,11 +74,13 @@ export default async function RequestsPage({
   const monthStart = new Date(`${monthPrefix}-01T00:00:00-05:00`);
   const monthEnd = new Date(`${monthPrefix}-${String(lastDay).padStart(2, "0")}T23:59:59-05:00`);
 
-  const [list, metrics, initialVersion] = await Promise.all([
+  const [list, metrics, initialVersion, currentUser] = await Promise.all([
     getUnifiedRequests({ query, operation, page, pageSize: PAGE_SIZE }),
     getRequestMetrics(dayStart, dayEnd, monthStart, monthEnd),
     getRequestsVersion(),
+    getCurrentUser(),
   ]);
+  const isAdmin = currentUser?.role === "administrador";
   const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
   const validReviewId = params.review && /^\d{1,20}$/.test(params.review);
 
@@ -229,12 +233,15 @@ export default async function RequestsPage({
                     <td className="px-5 py-4 font-semibold tabular-nums">{item.amount === null ? (item.type === "comprobante" ? "No leído" : "No aplica") : formatMoney(item.amount)}</td>
                     <td className="px-5 py-4"><StatusBadge status={item.status} /></td>
                     <td className="px-5 py-4">
-                      <Link
-                        href={`/solicitudes?${listParams({ page: String(page), reviewType: item.type, review: item.id })}`}
-                        className="inline-flex rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-secondary"
-                      >
-                        {(item.type === "servicio" || item.type === "comprobante") && item.status === "pendiente" ? "Atender" : item.status === "pendiente" || item.status === "error_comprobante" ? "Revisar" : "Ver detalle"}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/solicitudes?${listParams({ page: String(page), reviewType: item.type, review: item.id })}`}
+                          className="inline-flex rounded-lg border px-3 py-2 text-xs font-semibold hover:bg-secondary"
+                        >
+                          {(item.type === "servicio" || item.type === "comprobante") && item.status === "pendiente" ? "Atender" : item.status === "pendiente" || item.status === "error_comprobante" ? "Revisar" : "Ver detalle"}
+                        </Link>
+                        {item.type === "comprobante" && isAdmin && <DeleteFailedReceiptButton id={item.id} client={item.client} />}
+                      </div>
                     </td>
                   </tr>
                 );
