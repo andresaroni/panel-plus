@@ -310,6 +310,8 @@ model recarga_comprobante_fallido {
   comprobante_sha256     String?                            @db.Char(64)
   comprobante_tamano     Int?                               @db.UnsignedInt
   mensaje_cliente        String?                            @db.VarChar(500)
+  /// JSON con los datos del QR del comprobante y su comparación con la imagen (migracion_013).
+  qr_verificacion        String?                            @db.Text
   estado                 recarga_comprobante_fallido_estado @default(reintento)
   agente_panel_id        Int?                               @db.UnsignedInt
   atendido_at            DateTime?                          @db.DateTime(0)
@@ -324,6 +326,58 @@ model recarga_comprobante_fallido {
   @@index([presentado_panel_at], map: "idx_comprobante_fallido_presentado")
 }
 
+/// Chat web del asistente (widget de Juegos de Azar). Ver AsistenteBot/sql/migracion_012_chat_web.sql
+model chat_web_sesion {
+  conversacion_key  String               @id @db.VarChar(20)
+  usuario_juegos_id BigInt               @unique(map: "uq_chat_web_sesion_usuario") @db.UnsignedBigInt
+  cedula            String?              @db.VarChar(20)
+  nombre            String?              @db.VarChar(150)
+  modo              chat_web_sesion_modo @default(bot)
+  agente_panel_id   Int?                 @db.UnsignedInt
+  ultimo_agente_at  DateTime?            @db.DateTime(0)
+  ultimo_mensaje_at DateTime             @default(now()) @db.DateTime(0)
+  no_leidos_agente  Int                  @default(0) @db.UnsignedInt
+  date_create       DateTime             @default(now()) @db.DateTime(0)
+  date_update       DateTime             @default(now()) @db.DateTime(0)
+  chat_web_mensajes chat_web_mensajes[]
+
+  @@index([modo, ultimo_mensaje_at], map: "idx_chat_web_sesion_modo")
+}
+
+model chat_web_mensajes {
+  id_mensaje       BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  conversacion_key String                  @db.VarChar(20)
+  autor            chat_web_mensajes_autor
+  tipo             chat_web_mensajes_tipo  @default(texto)
+  texto            String?                 @db.Text
+  opciones         Json?
+  boton            String?                 @db.VarChar(40)
+  imagen           Bytes?
+  imagen_mime      String?                 @db.VarChar(100)
+  agente_panel_id  Int?                    @db.UnsignedInt
+  date_create      DateTime                @default(now()) @db.DateTime(0)
+  chat_web_sesion  chat_web_sesion         @relation(fields: [conversacion_key], references: [conversacion_key], onDelete: Cascade, onUpdate: Restrict, map: "fk_chat_web_mensajes_sesion")
+
+  @@index([conversacion_key, id_mensaje], map: "idx_chat_web_mensajes_conversacion")
+}
+
+enum chat_web_sesion_modo {
+  bot
+  agente
+}
+
+enum chat_web_mensajes_autor {
+  cliente
+  bot
+  agente
+}
+
+enum chat_web_mensajes_tipo {
+  texto
+  opciones
+  imagen
+}
+
 enum recarga_comprobante_fallido_motivo {
   descarga_fallida
   proveedor_no_disponible
@@ -334,6 +388,7 @@ enum recarga_comprobante_fallido_motivo {
   duplicado_reporte
   sin_saldo_plataforma
   error_interno
+  comprobante_falso
 }
 
 enum recarga_comprobante_fallido_estado {

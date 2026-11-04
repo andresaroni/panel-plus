@@ -30,6 +30,8 @@ export type UnifiedRequest = {
   amount: string | null;
   status: Status;
   createdAt: Date;
+  /** Comprobante cuyo QR no coincide con la imagen (validación del asistente). */
+  forged?: boolean;
 };
 
 export async function getUnifiedRequests({
@@ -147,6 +149,7 @@ export async function getUnifiedRequests({
       amount: item.monto?.toString() ?? null,
       status: item.estado,
       createdAt: item.date_create,
+      forged: item.motivo === "comprobante_falso",
     })),
   ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 

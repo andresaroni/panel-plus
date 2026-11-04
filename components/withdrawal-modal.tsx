@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { StatusBadge } from "@/components/status-badge";
+import { WebChatPanel } from "@/components/web-chat-panel";
 import { formatDate, formatMoney } from "@/lib/format";
+import { formatContact, isWebChatKey } from "@/lib/web-chat";
 import { prepareReceipt } from "@/lib/receipt-encode";
 import { isWithdrawalCancellable, isWithdrawalReviewable } from "@/lib/withdrawal-state";
 
@@ -141,7 +143,7 @@ export function WithdrawalModal({
               <Data label="Cliente" value={item.client} />
               <Data label="Cédula" value={item.clientId} />
               <Data label="Usuario" value={`@${item.username}`} />
-              <Data label="Teléfono" value={item.phone} />
+              <Data label="Contacto" value={formatContact(item.phone)} />
               <Data label="Sucursal" value={item.branch} />
               <Data label="Origen" value={item.origin.replaceAll("_", " ")} />
               <Data label="Plataforma" value={item.platform} />
@@ -173,6 +175,7 @@ export function WithdrawalModal({
               </div>
             )}
             {item.ocrText && !receiptError && <Info title="Lectura OCR" text={item.ocrText} />}
+            {isWebChatKey(item.phone) && <WebChatPanel chatKey={item.phone} clientName={item.client} />}
             {item.rejectionReason && <Info title="Motivo de rechazo" text={item.rejectionReason} destructive />}
             {failure ? (
               <UploadFailureInfo failure={failure} withdrawalId={item.id} />

@@ -225,8 +225,12 @@ export default async function RequestsPage({
                     </td>
                     <td className="px-5 py-4">
                       <span className="flex items-center gap-1.5">
-                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : item.type === "comprobante" ? <FileWarning className="size-4 text-orange-600" /> : <MessageCircle className="size-4 text-primary" />}
-                        {{ recarga: "Recarga", retiro: "Retiro", servicio: "Servicio", comprobante: "Comprobante no leído" }[item.type]}
+                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : item.type === "comprobante" ? <FileWarning className={`size-4 ${item.forged ? "text-red-600" : "text-orange-600"}`} /> : <MessageCircle className="size-4 text-primary" />}
+                        {item.forged ? (
+                          <span className="font-semibold text-red-600">Posible comprobante falso</span>
+                        ) : (
+                          { recarga: "Recarga", retiro: "Retiro", servicio: "Servicio", comprobante: "Comprobante no leído" }[item.type]
+                        )}
                       </span>
                     </td>
                     <td className="px-5 py-4 capitalize">{item.platform}</td>

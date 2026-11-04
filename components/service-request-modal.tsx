@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { StatusBadge } from "@/components/status-badge";
+import { WebChatPanel } from "@/components/web-chat-panel";
 import { formatDate } from "@/lib/format";
+import { formatContact, isWebChatKey } from "@/lib/web-chat";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 type Item = ReturnType<typeof import("@/lib/service-requests").serializeServiceRequest>;
@@ -20,7 +22,8 @@ export function ServiceRequestModal({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const whatsappUrl = buildWhatsAppUrl(item.phone);
+  const webChat = isWebChatKey(item.phone);
+  const whatsappUrl = webChat ? null : buildWhatsAppUrl(item.phone);
 
   async function markAttended() {
     setPending(true);
@@ -57,7 +60,7 @@ export function ServiceRequestModal({
             <Data label="Cliente" value={item.client} />
             <Data label="Cédula" value={item.clientId} />
             <Data label="Usuario" value={`@${item.username}`} />
-            <Data label="Teléfono" value={item.phone} />
+            <Data label="Contacto" value={formatContact(item.phone)} />
             <Data label="Sucursal" value={item.branch} />
             <Data label="Recibida" value={formatDate(item.createdAt)} />
           </dl>
@@ -65,9 +68,12 @@ export function ServiceRequestModal({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Servicio solicitado</p>
             <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed">{item.detail}</p>
           </div>
+          {webChat && <WebChatPanel chatKey={item.phone} clientName={item.client} />}
           {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {whatsappUrl ? (
+            {webChat ? (
+              <span className="flex h-11 items-center justify-center gap-2 rounded-xl bg-secondary text-sm text-muted-foreground"><MessageCircle className="size-4" />Responde en el chat web de arriba</span>
+            ) : whatsappUrl ? (
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-primary-foreground hover:brightness-95"><MessageCircle className="size-4" />Abrir chat en WhatsApp</a>
             ) : (
               <span className="flex h-11 items-center justify-center rounded-xl bg-secondary text-sm text-muted-foreground">Número de WhatsApp inválido</span>

@@ -60,9 +60,17 @@ async function requestMessage(type: RequestPushType, id: bigint): Promise<Reques
   if (type === "comprobante") {
     const exists = await prisma.recarga_comprobante_fallido.findFirst({
       where: { id_fallo: id, estado: "pendiente" },
-      select: { id_fallo: true },
+      select: { id_fallo: true, motivo: true },
     });
     if (!exists) return null;
+    if (exists.motivo === "comprobante_falso") {
+      return {
+        title: "⚠️ Posible comprobante falso",
+        body: "El QR del comprobante no coincide con los datos de la imagen. Revísalo antes de acreditar.",
+        url: `/solicitudes?reviewType=comprobante&review=${id}`,
+        tag: `solicitud-comprobante-${id}`,
+      };
+    }
     return {
       title: "Comprobante no leído",
       body: "El bot no pudo validar un comprobante de recarga y el cliente espera a un asesor.",

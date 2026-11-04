@@ -1,12 +1,14 @@
 "use client";
 
-import { Ban, CheckCircle2, MessageCircle, X } from "lucide-react";
+import { Ban, Check, CheckCircle2, MessageCircle, Minus, QrCode, ShieldAlert, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { StatusBadge } from "@/components/status-badge";
+import { WebChatPanel } from "@/components/web-chat-panel";
 import { formatDate, formatMoney } from "@/lib/format";
+import { formatContact, isWebChatKey } from "@/lib/web-chat";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 type Item = import("@/lib/failed-receipts").FailedReceiptCase;
@@ -22,10 +24,14 @@ export function FailedReceiptModal({
   const router = useRouter();
   const [pending, setPending] = useState<"atendido" | "descartado" | null>(null);
   const [error, setError] = useState("");
-  const whatsappUrl = buildWhatsAppUrl(
-    item.phone,
-    "Hola, te escribimos de FrankoPlus para ayudarte con el comprobante de tu recarga.",
-  );
+  const webChat = isWebChatKey(item.phone);
+  const forged = item.reason === "comprobante_falso";
+  const whatsappUrl = webChat
+    ? null
+    : buildWhatsAppUrl(
+        item.phone,
+        "Hola, te escribimos de FrankoPlus para ayudarte con el comprobante de tu recarga.",
+      );
 
   async function resolve(status: "atendido" | "descartado") {
     setPending(status);
@@ -56,7 +62,9 @@ export function FailedReceiptModal({
         <header className="flex items-start justify-between border-b p-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-primary">CMP-{item.id.padStart(4, "0")}</p>
-            <h2 id="failed-receipt-title" className="mt-1 text-xl font-semibold">Comprobante no leído</h2>
+            <h2 id="failed-receipt-title" className={`mt-1 text-xl font-semibold ${forged ? "text-red-600" : ""}`}>
+              {forged ? "Posible comprobante falso" : "Comprobante no leído"}
+            </h2>
           </div>
           <button onClick={() => router.back()} className="rounded-lg p-2 hover:bg-secondary" aria-label="Cerrar"><X className="size-5" /></button>
         </header>
@@ -67,17 +75,32 @@ export function FailedReceiptModal({
             <Data label="Cliente" value={item.client} />
             <Data label="Cédula" value={item.clientId} />
             <Data label="Usuario" value={`@${item.username}`} />
-            <Data label="Teléfono" value={item.phone} />
+            <Data label="Contacto" value={formatContact(item.phone)} />
             <Data label="Sucursal" value={item.branch} />
             <Data label="Plataforma" value={item.platform} />
             <Data label="Escalado" value={formatDate(item.createdAt)} />
             {item.attendedAt && <Data label="Resuelto" value={formatDate(item.attendedAt)} />}
           </dl>
 
-          <div className="mt-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
-            <p className="font-semibold">{item.reasonLabel}</p>
-            {item.detail && <p className="mt-1 break-words leading-relaxed">{item.detail}</p>}
-          </div>
+          {forged ? (
+            <div role="alert" className="mt-6 flex gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">
+              <ShieldAlert className="mt-0.5 size-5 shrink-0 text-red-600" />
+              <div>
+                <p className="font-semibold">El asistente detectó un posible comprobante falso</p>
+                <p className="mt-1 leading-relaxed">
+                  El código QR del comprobante contiene datos distintos a los que se ven en la imagen.
+                  Es probable que la captura haya sido editada. No acredites la recarga sin verificar
+                  la transferencia en la cuenta bancaria.
+                </p>
+                {item.detail && <p className="mt-2 break-words font-medium">{item.detail}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
+              <p className="font-semibold">{item.reasonLabel}</p>
+              {item.detail && <p className="mt-1 break-words leading-relaxed">{item.detail}</p>}
+            </div>
+          )}
 
           <h3 className="mt-8 font-semibold">Intentos del cliente ({item.attempts.length})</h3>
           <div className="mt-4 grid gap-4">
@@ -86,9 +109,12 @@ export function FailedReceiptModal({
             ))}
           </div>
 
+          {webChat && <WebChatPanel chatKey={item.phone} clientName={item.client} />}
           {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {whatsappUrl ? (
+            {webChat ? (
+              <span className="flex h-11 items-center justify-center gap-2 rounded-xl bg-secondary text-sm text-muted-foreground"><MessageCircle className="size-4" />Responde en el chat web de arriba</span>
+            ) : whatsappUrl ? (
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-primary-foreground hover:brightness-95"><MessageCircle className="size-4" />Abrir chat en WhatsApp</a>
             ) : (
               <span className="flex h-11 items-center justify-center rounded-xl bg-secondary text-sm text-muted-foreground">Número de WhatsApp inválido</span>
@@ -142,6 +168,7 @@ function AttemptCard({ attempt, client }: { attempt: Attempt; client: string }) 
           <Data label="Cuenta" value={attempt.account ?? "No leída"} />
           <Data label="Titular" value={attempt.beneficiary ?? "No leído"} />
         </dl>
+        {attempt.qrCheck && <QrComparison check={attempt.qrCheck} />}
         {attempt.customerMessage && (
           <div className="mt-4 rounded-lg bg-secondary/60 p-3">
             <p className="text-xs text-muted-foreground">Mensaje enviado al cliente</p>
@@ -175,6 +202,55 @@ function AttemptCard({ attempt, client }: { attempt: Attempt; client: string }) 
         )}
       </div>
     </article>
+  );
+}
+
+/** Datos de la imagen frente a los del QR del comprobante, campo por campo. */
+function QrComparison({ check }: { check: NonNullable<Attempt["qrCheck"]> }) {
+  return (
+    <div className={`mt-4 overflow-hidden rounded-lg border ${check.forged ? "border-red-300" : ""}`}>
+      <div className={`flex flex-wrap items-center gap-2 px-3 py-2 text-xs font-semibold ${check.forged ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>
+        <QrCode className="size-4" />
+        {check.forged ? "El QR no coincide con la imagen" : "El QR coincide con la imagen"}
+        {check.date && <span className="font-normal opacity-80">· Fecha según QR: {check.date}</span>}
+      </div>
+      <table className="w-full text-xs">
+        <thead className="bg-secondary/50 text-left text-muted-foreground">
+          <tr>
+            <th className="px-3 py-2 font-medium">Dato</th>
+            <th className="px-3 py-2 font-medium">En la imagen</th>
+            <th className="px-3 py-2 font-medium">En el QR</th>
+            <th className="w-8 px-3 py-2"><span className="sr-only">Resultado</span></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {check.fields.map((field) => {
+            const mismatch = field.matches === false;
+            return (
+              <tr key={field.field} className={mismatch && field.decisive ? "bg-red-50/70" : ""}>
+                <td className="px-3 py-2 font-medium">{field.label}</td>
+                <td className="break-words px-3 py-2">{field.image ?? "—"}</td>
+                <td className={`break-words px-3 py-2 ${mismatch ? "font-semibold text-red-700" : ""}`}>{field.qr ?? "—"}</td>
+                <td className="px-3 py-2">
+                  {field.matches === true ? (
+                    <Check className="size-4 text-emerald-600" aria-label="Coincide" />
+                  ) : mismatch ? (
+                    <X className={`size-4 ${field.decisive ? "text-red-600" : "text-orange-500"}`} aria-label="No coincide" />
+                  ) : (
+                    <Minus className="size-4 text-muted-foreground" aria-label="Sin dato para comparar" />
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {(check.originHolder || check.originAccount) && (
+        <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+          Origen según QR: {[check.originBank, check.originHolder, check.originAccount].filter(Boolean).join(" · ")}
+        </p>
+      )}
+    </div>
   );
 }
 

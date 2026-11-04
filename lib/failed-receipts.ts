@@ -3,7 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { failedReceiptReasonLabels, parseReceiptReadings } from "@/lib/receipt-readings";
+import { failedReceiptReasonLabels, parseQrCheck, parseReceiptReadings } from "@/lib/receipt-readings";
 
 // Las filas `reintento` son intentos que el cliente todavía podía corregir; al panel
 // solo llegan los casos que el bot escaló a un agente.
@@ -32,6 +32,7 @@ export const failedReceiptSelect = {
   cuenta_detectada: true,
   comprobante_tamano: true,
   mensaje_cliente: true,
+  qr_verificacion: true,
   estado: true,
   atendido_at: true,
   date_create: true,
@@ -77,6 +78,7 @@ function serializeAttempt(item: FailedReceiptRecord) {
     account: item.cuenta_detectada,
     hasImage: Boolean(item.comprobante_tamano),
     customerMessage: item.mensaje_cliente,
+    qrCheck: parseQrCheck(item.qr_verificacion),
     createdAt: item.date_create.toISOString(),
   };
 }
