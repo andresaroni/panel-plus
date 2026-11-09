@@ -6,6 +6,7 @@ import {
   Clock3,
   FileText,
   FileWarning,
+  Landmark,
   MessageCircle,
   Search,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import Form from "next/form";
 
 import { DeleteFailedReceiptButton } from "@/components/delete-failed-receipt-button";
 import { FailedReceiptModal } from "@/components/failed-receipt-modal";
+import { GiroRequestModal } from "@/components/giro-request-modal";
 import { LiveRequests } from "@/components/live-requests";
 import { MetricCard } from "@/components/metric-card";
 import { ReviewModal } from "@/components/review-modal";
@@ -22,6 +24,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { WithdrawalModal } from "@/components/withdrawal-modal";
 import { getFailedReceiptCase } from "@/lib/failed-receipts";
 import { formatMoney } from "@/lib/format";
+import { getGiroRequest } from "@/lib/giros";
 import { prisma } from "@/lib/prisma";
 import { requestSelect, serializeRequest, submittedTopUpWhere } from "@/lib/recargas";
 import { getRequestsVersion } from "@/lib/request-version";
@@ -55,7 +58,7 @@ export default async function RequestsPage({
 }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
-  const operation: OperationFilter = ["recarga", "retiro", "servicio", "comprobante"].includes(params.tipo ?? "")
+  const operation: OperationFilter = ["recarga", "retiro", "servicio", "comprobante", "giro"].includes(params.tipo ?? "")
     ? (params.tipo as OperationFilter)
     : "todas";
   const page = Math.min(100, Math.max(1, Number(params.page) || 1));
@@ -84,7 +87,7 @@ export default async function RequestsPage({
   const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
   const validReviewId = params.review && /^\d{1,20}$/.test(params.review);
 
-  const [selectedTopUp, selectedServiceRequest, selectedWithdrawal, selectedFailedReceipt] = await Promise.all([
+  const [selectedTopUp, selectedServiceRequest, selectedWithdrawal, selectedFailedReceipt, selectedGiro] = await Promise.all([
     validReviewId && params.reviewType === "recarga"
       ? prisma.recarga_whatsapp.findFirst({
           where: {
@@ -110,6 +113,9 @@ export default async function RequestsPage({
     validReviewId && params.reviewType === "comprobante"
       ? getFailedReceiptCase(BigInt(params.review!))
       : null,
+    validReviewId && params.reviewType === "giro" && /^\d{1,10}$/.test(params.review!)
+      ? getGiroRequest(Number(params.review))
+      : null,
   ]);
 
   // El ultimo intento de subida rechazado: es lo unico que explica por que un retiro
@@ -130,12 +136,14 @@ export default async function RequestsPage({
     {
       value: "todas",
       label: "Todas",
-      count: list.topUpCount + list.withdrawalCount + list.serviceCount + list.failedReceiptCount,
+      count:
+        list.topUpCount + list.withdrawalCount + list.serviceCount + list.failedReceiptCount + list.giroCount,
     },
     { value: "recarga", label: "Recargas", count: list.topUpCount },
     { value: "retiro", label: "Retiros", count: list.withdrawalCount },
     { value: "servicio", label: "Servicios", count: list.serviceCount },
     { value: "comprobante", label: "No leídos", count: list.failedReceiptCount },
+    { value: "giro", label: "Giros", count: list.giroCount },
   ];
 
   return (
@@ -144,7 +152,7 @@ export default async function RequestsPage({
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Centro de solicitudes</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gestiona recargas, retiros, solicitudes de servicio y comprobantes no leídos desde una sola bandeja.
+            Gestiona recargas, retiros, solicitudes de servicio, comprobantes no leídos y giros bancarios de dealers desde una sola bandeja.
           </p>
         </div>
         <LiveRequests
@@ -153,7 +161,8 @@ export default async function RequestsPage({
             selectedTopUp ||
             (selectedWithdrawal && isWithdrawalReviewable(selectedWithdrawal.estado)) ||
             selectedServiceRequest?.estado === "pendiente" ||
-            selectedFailedReceipt?.status === "pendiente"
+            selectedFailedReceipt?.status === "pendiente" ||
+            selectedGiro?.status === "pendiente"
           )}
         />
       </div>
@@ -216,20 +225,20 @@ export default async function RequestsPage({
             </thead>
             <tbody className="divide-y">
               {list.items.map((item) => {
-                const prefix = { recarga: "REC", retiro: "RET", servicio: "SER", comprobante: "CMP" }[item.type];
+                const prefix = { recarga: "REC", retiro: "RET", servicio: "SER", comprobante: "CMP", giro: "SOL" }[item.type];
                 return (
                   <tr key={item.key} className="hover:bg-secondary/25">
                     <td className="px-5 py-4">
                       <p className="font-medium">{item.client}</p>
-                      <p className="text-xs text-muted-foreground">{prefix}-{item.id.padStart(4, "0")} · @{item.username}</p>
+                      <p className="text-xs text-muted-foreground">{prefix}-{item.id.padStart(item.type === "giro" ? 5 : 4, "0")} · @{item.username}</p>
                     </td>
                     <td className="px-5 py-4">
                       <span className="flex items-center gap-1.5">
-                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : item.type === "comprobante" ? <FileWarning className={`size-4 ${item.forged ? "text-red-600" : "text-orange-600"}`} /> : <MessageCircle className="size-4 text-primary" />}
+                        {item.type === "recarga" ? <ArrowDownLeft className="size-4 text-primary" /> : item.type === "retiro" ? <ArrowUpRight className="size-4" /> : item.type === "comprobante" ? <FileWarning className={`size-4 ${item.forged ? "text-red-600" : "text-orange-600"}`} /> : item.type === "giro" ? <Landmark className="size-4 text-primary" /> : <MessageCircle className="size-4 text-primary" />}
                         {item.forged ? (
                           <span className="font-semibold text-red-600">Posible comprobante falso</span>
                         ) : (
-                          { recarga: "Recarga", retiro: "Retiro", servicio: "Servicio", comprobante: "Comprobante no leído" }[item.type]
+                          { recarga: "Recarga", retiro: "Retiro", servicio: "Servicio", comprobante: "Comprobante no leído", giro: "Giro Bancario Dealers" }[item.type]
                         )}
                       </span>
                     </td>
@@ -270,6 +279,7 @@ export default async function RequestsPage({
       {selectedWithdrawal && <WithdrawalModal item={serializeWithdrawal(selectedWithdrawal)} failure={withdrawalFailure} returnUrl={returnUrl} />}
       {selectedServiceRequest && <ServiceRequestModal item={serializeServiceRequest(selectedServiceRequest)} returnUrl={returnUrl} />}
       {selectedFailedReceipt && <FailedReceiptModal item={selectedFailedReceipt} returnUrl={returnUrl} />}
+      {selectedGiro && <GiroRequestModal item={selectedGiro} returnUrl={returnUrl} />}
     </div>
   );
 }

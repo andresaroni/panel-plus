@@ -14,9 +14,10 @@ export const isApuestasConfigured = env.APUESTAS_DATABASE_URL !== undefined;
 let cached: PrismaClient | undefined;
 
 /// Cliente dedicado a la base `apuestas`, donde viven las plataformas, su inventario de
-/// saldos y las sucursales. Solo se usa con consultas sin modelo (`$queryRaw`) y nunca
-/// escribe. Se crea de forma perezosa para no abrir una conexión cuando no está configurada.
-function getApuestasClient() {
+/// saldos y las sucursales. Solo se usa con consultas sin modelo (`$queryRaw`). La única
+/// escritura es la aprobación de giros (`lib/giros.ts`). Se crea de forma perezosa para no
+/// abrir una conexión cuando no está configurada.
+export function getApuestasClient() {
   const url = env.APUESTAS_DATABASE_URL;
   if (!url) {
     throw new Error("Falta configurar APUESTAS_DATABASE_URL para consultar las plataformas.");

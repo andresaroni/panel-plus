@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { escalatedFailedReceiptWhere } from "@/lib/failed-receipts";
+import { getGiroVersion } from "@/lib/giros";
 import { prisma } from "@/lib/prisma";
 import { submittedTopUpWhere } from "@/lib/recargas";
 import { submittedWithdrawalWhere } from "@/lib/retiros";
@@ -17,6 +18,7 @@ export async function getRequestsVersion() {
     serviceStates,
     failedReceipts,
     failedReceiptStates,
+    giros,
   ] = await Promise.all([
     prisma.recarga_whatsapp.aggregate({
       where: submittedTopUpWhere,
@@ -60,6 +62,7 @@ export async function getRequestsVersion() {
       _count: { _all: true },
       orderBy: { estado: "asc" },
     }),
+    getGiroVersion(),
   ]);
 
   const fingerprint = JSON.stringify({
@@ -87,6 +90,7 @@ export async function getRequestsVersion() {
       updatedAt: failedReceipts._max.date_update?.toISOString() ?? null,
       states: failedReceiptStates.map((item) => [item.estado, item._count._all]),
     },
+    giros,
   });
 
   return createHash("sha256").update(fingerprint).digest("base64url");

@@ -6,6 +6,7 @@ import {
   escalatedFailedReceiptWhere,
   failedReceiptSelect,
 } from "@/lib/failed-receipts";
+import { getGiroMetrics, listGiroRequests } from "@/lib/giros";
 import { prisma } from "@/lib/prisma";
 import { buildSearchWhere, requestSelect, submittedTopUpWhere } from "@/lib/recargas";
 import {
@@ -18,11 +19,11 @@ import {
   withdrawalSelect,
 } from "@/lib/retiros";
 
-export type OperationFilter = "todas" | "recarga" | "retiro" | "servicio" | "comprobante";
+export type OperationFilter = "todas" | "recarga" | "retiro" | "servicio" | "comprobante" | "giro";
 
 export type UnifiedRequest = {
   key: string;
-  type: "recarga" | "retiro" | "servicio" | "comprobante";
+  type: "recarga" | "retiro" | "servicio" | "comprobante" | "giro";
   id: string;
   client: string;
   username: string;
@@ -50,6 +51,7 @@ export async function getUnifiedRequests({
   const includeWithdrawals = operation === "todas" || operation === "retiro";
   const includeServices = operation === "todas" || operation === "servicio";
   const includeFailedReceipts = operation === "todas" || operation === "comprobante";
+  const includeGiros = operation === "todas" || operation === "giro";
   const topUpWhere = buildSearchWhere(query);
   const withdrawalWhere = buildWithdrawalWhere(query);
   const serviceWhere = buildServiceRequestWhere(query);
@@ -64,6 +66,7 @@ export async function getUnifiedRequests({
     withdrawalCount,
     serviceCount,
     failedReceiptCount,
+    giros,
   ] = await Promise.all([
     includeTopUps
       ? prisma.recarga_whatsapp.findMany({
@@ -101,7 +104,10 @@ export async function getUnifiedRequests({
     prisma.retirar_saldo.count({ where: withdrawalWhere }),
     prisma.solicitudes_servicio.count({ where: serviceWhere }),
     prisma.recarga_comprobante_fallido.count({ where: failedReceiptWhere }),
+    // Giro Bancario Dealers (base apuestas). Siempre se consulta para el conteo de la pestaña.
+    listGiroRequests(query, includeGiros ? take : 0),
   ]);
+  const giroCount = giros.total;
 
   const combined: UnifiedRequest[] = [
     ...topUps.map((item) => ({
@@ -151,6 +157,17 @@ export async function getUnifiedRequests({
       createdAt: item.date_create,
       forged: item.motivo === "comprobante_falso",
     })),
+    ...giros.items.map((item) => ({
+      key: `giro-${item.id}`,
+      type: "giro" as const,
+      id: String(item.id),
+      client: item.client ?? "Cliente sin nombre",
+      username: item.sellerUsername ?? "sin-usuario",
+      platform: `${item.operation === "Deposito" ? "Depósito" : "Retiro"} · ${item.branch ?? "Sin sucursal"}`,
+      amount: item.total.toString(),
+      status: item.status,
+      createdAt: item.createdAt,
+    })),
   ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
   const total =
@@ -162,7 +179,9 @@ export async function getUnifiedRequests({
           ? serviceCount
           : operation === "comprobante"
             ? failedReceiptCount
-            : topUpCount + withdrawalCount + serviceCount + failedReceiptCount;
+            : operation === "giro"
+              ? giroCount
+              : topUpCount + withdrawalCount + serviceCount + failedReceiptCount + giroCount;
   const offset = (page - 1) * pageSize;
   return {
     items: combined.slice(offset, offset + pageSize),
@@ -171,6 +190,7 @@ export async function getUnifiedRequests({
     withdrawalCount,
     serviceCount,
     failedReceiptCount,
+    giroCount,
   };
 }
 
@@ -194,6 +214,7 @@ export async function getRequestMetrics(
     totalServices,
     pendingFailedReceipts,
     totalFailedReceipts,
+    giroMetrics,
   ] = await Promise.all([
     prisma.recarga_whatsapp.count({
       where: { AND: [submittedTopUpWhere, { estado: "pendiente" }] },
@@ -235,14 +256,17 @@ export async function getRequestMetrics(
     prisma.recarga_comprobante_fallido.count({
       where: { AND: [escalatedFailedReceiptWhere, { date_create: month }] },
     }),
+    getGiroMetrics(),
   ]);
 
   return {
-    pending: pendingTopUps + pendingWithdrawals + pendingServices + pendingFailedReceipts,
-    approvedToday: approvedTopUpsToday + approvedWithdrawalsToday,
+    pending:
+      pendingTopUps + pendingWithdrawals + pendingServices + pendingFailedReceipts + giroMetrics.pending,
+    approvedToday: approvedTopUpsToday + approvedWithdrawalsToday + giroMetrics.approvedToday,
     volumeMonth:
       Number(topUpVolume._sum.monto?.toString() ?? 0) +
       Number(withdrawalVolume._sum.monto?.toString() ?? 0),
-    totalMonth: totalTopUps + totalWithdrawals + totalServices + totalFailedReceipts,
+    totalMonth:
+      totalTopUps + totalWithdrawals + totalServices + totalFailedReceipts + giroMetrics.totalMonth,
   };
 }
