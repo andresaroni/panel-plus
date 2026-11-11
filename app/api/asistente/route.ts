@@ -8,6 +8,18 @@ import {
 } from "@/lib/assistant-conversations";
 import { getCurrentUser } from "@/lib/session";
 
+export const maxDuration = 120;
+
+// Código corto y sin datos sensibles que el chat muestra junto al error,
+// para poder diagnosticar un fallo sin depender de los logs del servidor.
+function errorCode(error: unknown) {
+  if (!(error instanceof Error)) return "INTERNAL";
+  if (/^OPENAI_[A-Za-z0-9_]{1,60}$/.test(error.message)) return error.message;
+  const prismaCode = (error as { code?: unknown }).code;
+  if (typeof prismaCode === "string" && /^P\d{4}$/.test(prismaCode)) return `DB_${prismaCode}`;
+  return /^[A-Za-z]{1,40}$/.test(error.name) ? `INTERNAL_${error.name}` : "INTERNAL";
+}
+
 const requestSchema = z.object({
   conversationId: z.string().regex(/^\d+$/).nullable(),
   message: z.string().trim().min(1).max(2_000),
@@ -87,6 +99,6 @@ export async function POST(request: Request) {
       error instanceof Error && error.message === "OPENAI_NOT_CONFIGURED"
         ? "El Asistente IA todavía no está configurado en el servidor."
         : "No pude completar la consulta en este momento. Inténtalo nuevamente.";
-    return NextResponse.json({ error: message }, { status: 503 });
+    return NextResponse.json({ error: message, code: errorCode(error) }, { status: 503 });
   }
 }

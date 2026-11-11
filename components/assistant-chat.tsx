@@ -37,6 +37,109 @@ const suggestions = [
   "Compara las operaciones por sucursal",
 ];
 
+type AssistantReply = { answer: string; conversation: ConversationSummary };
+
+const CONNECTION_ERROR =
+  "Tu conexión se interrumpió antes de recibir la respuesta. Revisa tu internet e inténtalo de nuevo.";
+
+// Error respondido por el servidor (a diferencia de un corte de red).
+class AssistantServerError extends Error {}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestAnswer(conversationId: string | null, message: string): Promise<AssistantReply> {
+  // Un fallo de red hace que fetch lance TypeError; se deja propagar tal cual.
+  const response = await fetch("/api/asistente", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversationId, message }),
+  });
+
+  let data: { answer?: string; conversation?: ConversationSummary; error?: string; code?: string };
+  try {
+    data = await response.json();
+  } catch (parseError) {
+    if (response.ok) throw parseError instanceof TypeError ? parseError : new TypeError("BODY_INTERRUPTED");
+    throw new AssistantServerError(
+      `El servidor no respondió a tiempo. Inténtalo nuevamente. (Código: HTTP_${response.status})`,
+    );
+  }
+
+  if (!response.ok || !data.answer || !data.conversation) {
+    const text = data.error ?? "No se recibió una respuesta válida.";
+    throw new AssistantServerError(data.code ? `${text} (Código: ${data.code})` : text);
+  }
+  return { answer: data.answer, conversation: data.conversation };
+}
+
+// Tras un corte de red el servidor puede haber terminado y guardado la respuesta:
+// se busca en el historial para mostrarla sin volver a enviar la consulta.
+async function recoverAnswer(
+  conversationId: string,
+  message: string,
+  sentAt: number,
+): Promise<AssistantReply | null> {
+  try {
+    const response = await fetch(`/api/asistente/conversaciones/${conversationId}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as ConversationDetail;
+    const answer = data.messages.at(-1);
+    const question = data.messages.at(-2);
+    if (
+      answer?.role === "assistant" &&
+      question?.role === "user" &&
+      question.content === message &&
+      question.createdAt &&
+      Date.parse(question.createdAt) >= sentAt - 60_000
+    ) {
+      return { answer: answer.content, conversation: data.conversation };
+    }
+  } catch {
+    // Sin conexión todavía: se decide más arriba si reintentar.
+  }
+  return null;
+}
+
+async function askWithRecovery(
+  conversationId: string | null,
+  message: string,
+  onReconnecting: () => void,
+): Promise<AssistantReply> {
+  const sentAt = Date.now();
+  try {
+    return await requestAnswer(conversationId, message);
+  } catch (firstError) {
+    if (firstError instanceof AssistantServerError) throw firstError;
+  }
+
+  onReconnecting();
+  if (conversationId) {
+    for (const delay of [4_000, 6_000]) {
+      await wait(delay);
+      const recovered = await recoverAnswer(conversationId, message, sentAt);
+      if (recovered) return recovered;
+    }
+  } else {
+    await wait(2_500);
+  }
+
+  try {
+    return await requestAnswer(conversationId, message);
+  } catch (retryError) {
+    if (retryError instanceof AssistantServerError) throw retryError;
+    if (conversationId) {
+      await wait(4_000);
+      const recovered = await recoverAnswer(conversationId, message, sentAt);
+      if (recovered) return recovered;
+    }
+    throw new Error(CONNECTION_ERROR);
+  }
+}
+
 function initialMessage(name: string): ChatMessage {
   return {
     id: "welcome",
@@ -73,6 +176,7 @@ export function AssistantChat({
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -97,31 +201,19 @@ export function AssistantChat({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/asistente", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message: content }),
-      });
-      const data = (await response.json()) as {
-        answer?: string;
-        conversation?: ConversationSummary;
-        error?: string;
-      };
-      if (!response.ok || !data.answer || !data.conversation) {
-        throw new Error(data.error ?? "No se recibió una respuesta válida.");
-      }
+      const data = await askWithRecovery(activeId, content, () => setReconnecting(true));
 
       setActiveId(data.conversation.id);
       setConversations((current) => [
-        data.conversation!,
-        ...current.filter((item) => item.id !== data.conversation!.id),
+        data.conversation,
+        ...current.filter((item) => item.id !== data.conversation.id),
       ]);
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: data.answer!,
+          content: data.answer,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -135,6 +227,7 @@ export function AssistantChat({
       );
     } finally {
       setLoading(false);
+      setReconnecting(false);
     }
   }
 
@@ -341,7 +434,8 @@ export function AssistantChat({
                 <Bot className="size-4" aria-hidden="true" />
               </span>
               <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> Consultando registros...
+                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />{" "}
+                {reconnecting ? "Conexión inestable, reintentando..." : "Consultando registros..."}
               </div>
             </div>
           )}
